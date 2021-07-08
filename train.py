@@ -26,6 +26,7 @@ def parse_args():
     parser.add_argument('--image_size', default=84, type=int)
     parser.add_argument('--action_repeat', default=1, type=int)
     parser.add_argument('--frame_stack', default=3, type=int)
+    parser.add_argument('--env_spec', default='full')
     # replay buffer
     parser.add_argument('--replay_buffer_capacity', default=1000000, type=int)
     # train
@@ -49,11 +50,11 @@ def parse_args():
     parser.add_argument('--actor_log_std_max', default=2, type=float)
     parser.add_argument('--actor_update_freq', default=2, type=int)
     # encoder/decoder
-    parser.add_argument('--encoder_type', default='pixel', type=str)
+    parser.add_argument('--encoder_type', default='identity', type=str)
     parser.add_argument('--encoder_feature_dim', default=50, type=int)
     parser.add_argument('--encoder_lr', default=1e-3, type=float)
     parser.add_argument('--encoder_tau', default=0.05, type=float)
-    parser.add_argument('--decoder_type', default='pixel', type=str)
+    parser.add_argument('--decoder_type', default='identity', type=str)
     parser.add_argument('--decoder_lr', default=1e-3, type=float)
     parser.add_argument('--decoder_update_freq', default=1, type=int)
     parser.add_argument('--decoder_latent_lambda', default=1e-6, type=float)
@@ -69,8 +70,8 @@ def parse_args():
     parser.add_argument('--seed', default=1, type=int)
     parser.add_argument('--work_dir', default='.', type=str)
     parser.add_argument('--save_tb', default=False, action='store_true')
-    parser.add_argument('--save_model', default=False, action='store_true')
-    parser.add_argument('--save_buffer', default=False, action='store_true')
+    parser.add_argument('--save_model', default=True, action='store_true')
+    parser.add_argument('--save_buffer', default=True, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
     args = parser.parse_args()
@@ -140,7 +141,7 @@ def main():
         task_name=args.task_name,
         seed=args.seed,
         visualize_reward=False,
-        from_pixels=(args.encoder_type == 'pixel'),
+        spec=args.env_spec,
         height=args.image_size,
         width=args.image_size,
         frame_skip=args.action_repeat
@@ -148,8 +149,8 @@ def main():
     env.seed(args.seed)
 
     # stack several consecutive frames together
-    if args.encoder_type == 'pixel':
-        env = utils.FrameStack(env, k=args.frame_stack)
+    #if args.encoder_type == 'pixel':
+    env = utils.FrameStack(env, k=args.frame_stack)
 
     utils.make_dir(args.work_dir)
     video_dir = utils.make_dir(os.path.join(args.work_dir, 'video'))
@@ -169,6 +170,7 @@ def main():
 
     replay_buffer = utils.ReplayBuffer(
         obs_shape=env.observation_space.shape,
+        state_shape=env.state_space.shape,
         action_shape=env.action_space.shape,
         capacity=args.replay_buffer_capacity,
         batch_size=args.batch_size,
@@ -176,7 +178,7 @@ def main():
     )
 
     agent = make_agent(
-        obs_shape=env.observation_space.shape,
+        obs_shape=env.state_space.shape,
         action_shape=env.action_space.shape,
         args=args,
         device=device
@@ -204,7 +206,7 @@ def main():
 
             L.log('train/episode_reward', episode_reward, step)
 
-            obs = env.reset()
+            obs, state = env.reset()
             done = False
             episode_reward = 0
             episode_step = 0
@@ -225,7 +227,7 @@ def main():
             for _ in range(num_updates):
                 agent.update(replay_buffer, L, step)
 
-        next_obs, reward, done, _ = env.step(action)
+        next_obs, next_state, reward, done, _ = env.step(action)
 
         # allow infinit bootstrap
         done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
@@ -233,9 +235,10 @@ def main():
         )
         episode_reward += reward
 
-        replay_buffer.add(obs, action, reward, next_obs, done_bool)
+        replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool)
 
         obs = next_obs
+        state = next_state
         episode_step += 1
 
 

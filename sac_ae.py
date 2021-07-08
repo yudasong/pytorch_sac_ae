@@ -204,11 +204,11 @@ class SacAeAgent(object):
         critic_beta=0.9,
         critic_tau=0.005,
         critic_target_update_freq=2,
-        encoder_type='pixel',
+        encoder_type='identity',
         encoder_feature_dim=50,
         encoder_lr=1e-3,
         encoder_tau=0.005,
-        decoder_type='pixel',
+        decoder_type='identity',
         decoder_lr=1e-3,
         decoder_update_freq=1,
         decoder_latent_lambda=0.0,
@@ -224,6 +224,7 @@ class SacAeAgent(object):
         self.critic_target_update_freq = critic_target_update_freq
         self.decoder_update_freq = decoder_update_freq
         self.decoder_latent_lambda = decoder_latent_lambda
+        self.encoder_type = encoder_type
 
         self.actor = Actor(
             obs_shape, action_shape, hidden_dim, encoder_type,
@@ -391,14 +392,20 @@ class SacAeAgent(object):
         self.decoder.log(L, step, log_freq=LOG_FREQ)
 
     def update(self, replay_buffer, L, step):
-        obs, action, reward, next_obs, not_done = replay_buffer.sample()
+        obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
 
         L.log('train/batch_reward', reward.mean(), step)
 
-        self.update_critic(obs, action, reward, next_obs, not_done, L, step)
+        if self.encoder_type == 'identity':
+            self.update_critic(state, action, reward, next_state, not_done, L, step)
+        else:
+            self.update_critic(obs, action, reward, next_obs, not_done, L, step)
 
         if step % self.actor_update_freq == 0:
-            self.update_actor_and_alpha(obs, L, step)
+            if self.encoder_type == 'identity':
+                self.update_actor_and_alpha(state, L, step)
+            else:
+                self.update_actor_and_alpha(obs, L, step)
 
         if step % self.critic_target_update_freq == 0:
             utils.soft_update_params(

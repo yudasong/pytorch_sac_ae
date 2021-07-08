@@ -67,16 +67,18 @@ def preprocess_obs(obs, bits=5):
 
 class ReplayBuffer(object):
     """Buffer to store environment transitions."""
-    def __init__(self, obs_shape, action_shape, capacity, batch_size, device):
+    def __init__(self, obs_shape, state_shape, action_shape, capacity, batch_size, device):
         self.capacity = capacity
         self.batch_size = batch_size
         self.device = device
 
         # the proprioceptive obs is stored as float32, pixels obs as uint8
-        obs_dtype = np.float32 if len(obs_shape) == 1 else np.uint8
+        obs_dtype = np.uint8
 
-        self.obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
-        self.next_obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
+        self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        self.states = np.empty((capacity, *obs_shape), dtype=np.float32)
+        self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        self.next_states = np.empty((capacity, *obs_shape), dtype=np.float32)
         self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
         self.not_dones = np.empty((capacity, 1), dtype=np.float32)
@@ -85,11 +87,13 @@ class ReplayBuffer(object):
         self.last_save = 0
         self.full = False
 
-    def add(self, obs, action, reward, next_obs, done):
+    def add(self, obs, state, action, reward, next_obs, next_state, done):
         np.copyto(self.obses[self.idx], obs)
+        np.copyto(self.states[self.idx],state)
         np.copyto(self.actions[self.idx], action)
         np.copyto(self.rewards[self.idx], reward)
         np.copyto(self.next_obses[self.idx], next_obs)
+        np.copyto(self.next_states[self.idx],next_state)
         np.copyto(self.not_dones[self.idx], not done)
 
         self.idx = (self.idx + 1) % self.capacity
@@ -101,11 +105,13 @@ class ReplayBuffer(object):
         )
 
         obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
+        states = torch.as_tensor(self.states[idxs], device=self.device).float()
         actions = torch.as_tensor(self.actions[idxs], device=self.device)
         rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
         next_obses = torch.as_tensor(
             self.next_obses[idxs], device=self.device
         ).float()
+        next_states = torch.as_tensor(self.next_states[idxs], device=self.device).float()
         not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
 
         return obses, actions, rewards, next_obses, not_dones
@@ -116,7 +122,9 @@ class ReplayBuffer(object):
         path = os.path.join(save_dir, '%d_%d.pt' % (self.last_save, self.idx))
         payload = [
             self.obses[self.last_save:self.idx],
+            self.states[self.last_save:self.idx],
             self.next_obses[self.last_save:self.idx],
+            self.next_states[self.last_save:self.idx],
             self.actions[self.last_save:self.idx],
             self.rewards[self.last_save:self.idx],
             self.not_dones[self.last_save:self.idx]
@@ -133,10 +141,12 @@ class ReplayBuffer(object):
             payload = torch.load(path)
             assert self.idx == start
             self.obses[start:end] = payload[0]
-            self.next_obses[start:end] = payload[1]
-            self.actions[start:end] = payload[2]
-            self.rewards[start:end] = payload[3]
-            self.not_dones[start:end] = payload[4]
+            self.states[start:end] = payload[1]
+            self.next_obses[start:end] = payload[2]
+            self.next_states[start:end] = payload[3]
+            self.actions[start:end] = payload[4]
+            self.rewards[start:end] = payload[5]
+            self.not_dones[start:end] = payload[6]
             self.idx = end
 
 
@@ -155,15 +165,15 @@ class FrameStack(gym.Wrapper):
         self._max_episode_steps = env._max_episode_steps
 
     def reset(self):
-        obs = self.env.reset()
+        obs, state = self.env.reset()
         for _ in range(self._k):
             self._frames.append(obs)
         return self._get_obs()
 
     def step(self, action):
-        obs, reward, done, info = self.env.step(action)
+        obs, state, reward, done, info = self.env.step(action)
         self._frames.append(obs)
-        return self._get_obs(), reward, done, info
+        return self._get_obs(), state, reward, done, info
 
     def _get_obs(self):
         assert len(self._frames) == self._k
