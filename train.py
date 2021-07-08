@@ -80,14 +80,17 @@ def parse_args():
 
 def evaluate(env, agent, video, num_episodes, L, step):
     for i in range(num_episodes):
-        obs = env.reset()
+        obs, state = env.reset()
         video.init(enabled=(i == 0))
         done = False
         episode_reward = 0
         while not done:
             with utils.eval_mode(agent):
-                action = agent.select_action(obs)
-            obs, reward, done, _ = env.step(action)
+                if agent.encoder_type == 'identity':
+                    action = agent.select_action(state)
+                else:
+                    action = agent.select_action(obs)
+            obs, state, reward, done, _ = env.step(action)
             video.record(env)
             episode_reward += reward
 
@@ -163,7 +166,7 @@ def main():
         json.dump(vars(args), f, sort_keys=True, indent=4)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-
+    print(device)
     # the dmc2gym wrapper standardizes actions
     assert env.action_space.low.min() >= -1
     assert env.action_space.high.max() <= 1
@@ -219,7 +222,10 @@ def main():
             action = env.action_space.sample()
         else:
             with utils.eval_mode(agent):
-                action = agent.sample_action(obs)
+                if agent.encoder_type == 'identity':
+                    action = agent.sample_action(state)
+                else:
+                    action = agent.sample_action(obs)
 
         # run training update
         if step >= args.init_steps:

@@ -49,7 +49,7 @@ def make_dir(dir_path):
     try:
         os.mkdir(dir_path)
     except OSError:
-        pass
+        print("dir note created!")
     return dir_path
 
 
@@ -76,9 +76,9 @@ class ReplayBuffer(object):
         obs_dtype = np.uint8
 
         self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
-        self.states = np.empty((capacity, *obs_shape), dtype=np.float32)
+        self.states = np.empty((capacity, *state_shape), dtype=np.float32)
         self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
-        self.next_states = np.empty((capacity, *obs_shape), dtype=np.float32)
+        self.next_states = np.empty((capacity, *state_shape), dtype=np.float32)
         self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
         self.not_dones = np.empty((capacity, 1), dtype=np.float32)
@@ -114,7 +114,7 @@ class ReplayBuffer(object):
         next_states = torch.as_tensor(self.next_states[idxs], device=self.device).float()
         not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
 
-        return obses, actions, rewards, next_obses, not_dones
+        return obses,states, actions, rewards, next_obses, next_states, not_dones
 
     def save(self, save_dir):
         if self.idx == self.last_save:
@@ -168,7 +168,7 @@ class FrameStack(gym.Wrapper):
         obs, state = self.env.reset()
         for _ in range(self._k):
             self._frames.append(obs)
-        return self._get_obs()
+        return self._get_obs(), state
 
     def step(self, action):
         obs, state, reward, done, info = self.env.step(action)
