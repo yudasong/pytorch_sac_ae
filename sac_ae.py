@@ -45,6 +45,42 @@ def weight_init(m):
         nn.init.orthogonal_(m.weight.data[:, :, mid, mid], gain)
 
 
+class BCActor(nn.Module):
+    """MLP actor network."""
+    def __init__(
+        self, obs_shape, action_shape, hidden_dim, encoder_type,
+        encoder_feature_dim, log_std_min, log_std_max, num_layers, num_filters
+    ):
+        super().__init__()
+
+        self.encoder = make_encoder(
+            encoder_type, obs_shape, encoder_feature_dim, num_layers,
+            num_filters
+        )
+
+        self.log_std_min = log_std_min
+        self.log_std_max = log_std_max
+
+        self.trunk = nn.Sequential(
+            nn.Linear(self.encoder.feature_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, action_shape[0])
+        )
+
+        self.outputs = dict()
+        self.apply(weight_init)
+
+    def forward(
+        self, obs, detach_encoder=False
+    ):
+        obs = self.encoder(obs, detach=detach_encoder)
+
+        mu = self.trunk(obs)
+        mu = torch.tanh(mu)
+
+        return mu
+
+
 class Actor(nn.Module):
     """MLP actor network."""
     def __init__(
@@ -309,6 +345,14 @@ class SacAeAgent(object):
             )
             return mu.cpu().data.numpy().flatten()
 
+    def select_action_batch(self,obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            mu, _, _, _ = self.actor(
+                obs, compute_pi=False, compute_log_pi=False
+            )
+            return mu
+
     def sample_action(self, obs):
         with torch.no_grad():
             obs = torch.FloatTensor(obs).to(self.device)
@@ -446,3 +490,148 @@ class SacAeAgent(object):
             self.decoder.load_state_dict(
                 torch.load('%s/decoder_%s.pt' % (model_dir, step))
             )
+
+
+class BCAgent(object):
+    """SAC+AE algorithm."""
+    def __init__(
+        self,
+        obs_shape,
+        action_shape,
+        device,
+        hidden_dim=256,
+        discount=0.99,
+        init_temperature=0.01,
+        alpha_lr=1e-3,
+        alpha_beta=0.9,
+        actor_lr=1e-3,
+        actor_beta=0.9,
+        actor_log_std_min=-10,
+        actor_log_std_max=2,
+        actor_update_freq=2,
+        critic_lr=1e-3,
+        critic_beta=0.9,
+        critic_tau=0.005,
+        critic_target_update_freq=2,
+        encoder_type='identity',
+        encoder_feature_dim=50,
+        encoder_lr=1e-3,
+        encoder_tau=0.005,
+        num_layers=4,
+        num_filters=32
+    ):
+        self.device = device
+        self.discount = discount
+        self.critic_tau = critic_tau
+        self.encoder_tau = encoder_tau
+        self.actor_update_freq = actor_update_freq
+        self.critic_target_update_freq = critic_target_update_freq
+        self.encoder_type = encoder_type
+
+        self.actor = BCActor(
+            obs_shape, action_shape, hidden_dim, encoder_type,
+            encoder_feature_dim, actor_log_std_min, actor_log_std_max,
+            num_layers, num_filters
+        ).to(device)
+
+
+        # optimizers
+        self.actor_optimizer = torch.optim.Adam(
+            self.actor.parameters(), lr=actor_lr, betas=(actor_beta, 0.999)
+        )
+
+        self.train()
+
+    def train(self, training=True):
+        self.training = training
+        self.actor.train(training)
+
+    def select_action(self, obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            obs = obs.unsqueeze(0)
+            mu = self.actor(
+                obs, compute_pi=False, compute_log_pi=False
+            )
+            return mu.cpu().data.numpy().flatten()
+
+    def sample_action(self, obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            obs = obs.unsqueeze(0)
+            mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
+            return pi.cpu().data.numpy().flatten()
+
+    def update_critic(self, obs, action, reward, next_obs, not_done, L, step):
+        with torch.no_grad():
+            _, policy_action, log_pi, _ = self.actor(next_obs)
+            target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
+            target_V = torch.min(target_Q1,
+                                 target_Q2) - self.alpha.detach() * log_pi
+            target_Q = reward + (not_done * self.discount * target_V)
+
+        # get current Q estimates
+        current_Q1, current_Q2 = self.critic(obs, action)
+        critic_loss = F.mse_loss(current_Q1,
+                                 target_Q) + F.mse_loss(current_Q2, target_Q)
+        L.log('train_critic/loss', critic_loss, step)
+
+
+        # Optimize the critic
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        self.critic.log(L, step)
+
+    def update_actor(self, obs, exp_action):
+        # detach encoder, so we don't update it with the actor loss
+        mu = self.actor(obs, detach_encoder=True)
+
+        actor_loss = F.mse_loss(mu-exp_action)
+
+        # optimize the actor
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        self.actor_optimizer.step()
+
+    def update(self, expert, dataset):
+        obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
+
+        expert_actions = expert.select_action_batch(state)
+        self.update_actor(obs,expert_actions)
+
+        # if self.encoder_type == 'identity':
+        #     self.update_critic(state, action, reward, next_state, not_done, L, step)
+        # else:
+        #     self.update_critic(obs, action, reward, next_obs, not_done, L, step)
+
+
+        # if step % self.critic_target_update_freq == 0:
+        #     utils.soft_update_params(
+        #         self.critic.Q1, self.critic_target.Q1, self.critic_tau
+        #     )
+        #     utils.soft_update_params(
+        #         self.critic.Q2, self.critic_target.Q2, self.critic_tau
+        #     )
+        #     utils.soft_update_params(
+        #         self.critic.encoder, self.critic_target.encoder,
+        #         self.encoder_tau
+        #     )
+
+
+    def save(self, model_dir, step):
+        torch.save(
+            self.actor.state_dict(), '%s/bc_actor_%s.pt' % (model_dir, step)
+        )
+        torch.save(
+            self.critic.state_dict(), '%s/bc_critic_%s.pt' % (model_dir, step)
+        )
+
+    def load(self, model_dir, step):
+        self.actor.load_state_dict(
+            torch.load('%s/actor_%s.pt' % (model_dir, step))
+        )
+        self.critic.load_state_dict(
+            torch.load('%s/critic_%s.pt' % (model_dir, step))
+        )
