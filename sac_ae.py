@@ -168,6 +168,21 @@ class QFunction(nn.Module):
         obs_action = torch.cat([obs, action], dim=1)
         return self.trunk(obs_action)
 
+class VFunction(nn.Module):
+    """MLP for v-function."""
+    def __init__(self, obs_dim, hidden_dim):
+        super().__init__()
+
+        self.trunk = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
+            nn.Linear(hidden_dim, 1)
+        )
+
+    def forward(self, obs):
+        return self.trunk(obs)
+
+
 
 class Critic(nn.Module):
     """Critic network, employes two q-functions."""
@@ -204,6 +219,45 @@ class Critic(nn.Module):
         self.outputs['q2'] = q2
 
         return q1, q2
+
+    def log(self, L, step, log_freq=LOG_FREQ):
+        if step % log_freq != 0:
+            return
+
+        self.encoder.log(L, step, log_freq)
+
+        for k, v in self.outputs.items():
+            L.log_histogram('train_critic/%s_hist' % k, v, step)
+
+        for i in range(3):
+            L.log_param('train_critic/q1_fc%d' % i, self.Q1.trunk[i * 2], step)
+            L.log_param('train_critic/q2_fc%d' % i, self.Q2.trunk[i * 2], step)
+
+class VNet(nn.Module):
+    """Critic network, employes two q-functions."""
+    def __init__(
+        self, obs_shape, hidden_dim, encoder_type,
+        encoder_feature_dim, num_layers, num_filters
+    ):
+        super().__init__()
+
+
+        self.encoder = make_encoder(
+            encoder_type, obs_shape, encoder_feature_dim, num_layers,
+            num_filters
+        )
+
+        self.V = VFunction(
+            self.encoder.feature_dim, hidden_dim
+        )
+
+        self.apply(weight_init)
+
+    def forward(self, obs, detach_encoder=False):
+        # detach_encoder allows to stop gradient propogation to encoder
+        obs = self.encoder(obs, detach=detach_encoder)
+        v = self.V(obs)
+        return v
 
     def log(self, L, step, log_freq=LOG_FREQ):
         if step % log_freq != 0:
@@ -533,10 +587,20 @@ class BCAgent(object):
             num_layers, num_filters
         ).to(device)
 
+        self.value_net = VFunction(
+            obs_shape, hidden_dim, encoder_type,
+            encoder_feature_dim, num_layers, num_filters
+        ).to(device)
+
+        self.actor.encoder.copy_conv_weights_from(self.value_net.encoder)
 
         # optimizers
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(), lr=actor_lr, betas=(actor_beta, 0.999)
+        )
+
+        self.V_optimizer = torch.optim.Adam(
+            self.value_net.parameters(), lr=critic_lr, betas=(critic_beta, 0.999)
         )
 
         self.train()
@@ -560,28 +624,6 @@ class BCAgent(object):
             mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
             return pi.cpu().data.numpy().flatten()
 
-    def update_critic(self, obs, action, reward, next_obs, not_done, L, step):
-        with torch.no_grad():
-            _, policy_action, log_pi, _ = self.actor(next_obs)
-            target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
-            target_V = torch.min(target_Q1,
-                                 target_Q2) - self.alpha.detach() * log_pi
-            target_Q = reward + (not_done * self.discount * target_V)
-
-        # get current Q estimates
-        current_Q1, current_Q2 = self.critic(obs, action)
-        critic_loss = F.mse_loss(current_Q1,
-                                 target_Q) + F.mse_loss(current_Q2, target_Q)
-        L.log('train_critic/loss', critic_loss, step)
-
-
-        # Optimize the critic
-        self.critic_optimizer.zero_grad()
-        critic_loss.backward()
-        self.critic_optimizer.step()
-
-        self.critic.log(L, step)
-
     def update_actor(self, obs, exp_action):
         # detach encoder, so we don't update it with the actor loss
         mu = self.actor(obs, detach_encoder=True)
@@ -593,11 +635,25 @@ class BCAgent(object):
         actor_loss.backward()
         self.actor_optimizer.step()
 
+    def update_value(self, expert, obs, state, next_state):
+        with torch.no_grad():
+            _, policy_action, log_pi, _ = expert.actor(next_state)
+            target_Q1, target_Q2 = expert.critic_target(next_state, policy_action)
+            target_V = torch.min(target_Q1,
+                                 target_Q2) - expert.alpha.detach() * log_pi
+
+        current_V = self.value_net(obs)
+        V_loss = F.mse(current_V, target_V)
+        self.V_optimizer.zero_grad()
+        V_loss.backward()
+        self.V_optimizer.step()
+
     def update(self, expert, replay_buffer):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
 
         expert_actions = expert.select_action_batch(state)
         self.update_actor(obs,expert_actions)
+        self.update_value(expert, obs, state, next_state)
 
         # if self.encoder_type == 'identity':
         #     self.update_critic(state, action, reward, next_state, not_done, L, step)
@@ -622,9 +678,9 @@ class BCAgent(object):
         torch.save(
             self.actor.state_dict(), '%s/bc_actor_%s.pt' % (model_dir, step)
         )
-        #torch.save(
-        #    self.critic.state_dict(), '%s/bc_critic_%s.pt' % (model_dir, step)
-        #)
+        torch.save(
+            self.value_net.state_dict(), '%s/bc_vnet_%s.pt' % (model_dir, step)
+        )
 
     def load(self, model_dir, step):
         self.actor.load_state_dict(
