@@ -347,7 +347,6 @@ class SacAeAgent(object):
 
     def select_action_batch(self,obs):
         with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(self.device)
             mu, _, _, _ = self.actor(
                 obs, compute_pi=False, compute_log_pi=False
             )
@@ -551,8 +550,7 @@ class BCAgent(object):
             obs = torch.FloatTensor(obs).to(self.device)
             obs = obs.unsqueeze(0)
             mu = self.actor(
-                obs, compute_pi=False, compute_log_pi=False
-            )
+                obs)
             return mu.cpu().data.numpy().flatten()
 
     def sample_action(self, obs):
@@ -588,14 +586,14 @@ class BCAgent(object):
         # detach encoder, so we don't update it with the actor loss
         mu = self.actor(obs, detach_encoder=True)
 
-        actor_loss = F.mse_loss(mu-exp_action)
+        actor_loss = F.mse_loss(mu,exp_action)
 
         # optimize the actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
-    def update(self, expert, dataset):
+    def update(self, expert, replay_buffer):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
 
         expert_actions = expert.select_action_batch(state)
@@ -624,9 +622,9 @@ class BCAgent(object):
         torch.save(
             self.actor.state_dict(), '%s/bc_actor_%s.pt' % (model_dir, step)
         )
-        torch.save(
-            self.critic.state_dict(), '%s/bc_critic_%s.pt' % (model_dir, step)
-        )
+        #torch.save(
+        #    self.critic.state_dict(), '%s/bc_critic_%s.pt' % (model_dir, step)
+        #)
 
     def load(self, model_dir, step):
         self.actor.load_state_dict(

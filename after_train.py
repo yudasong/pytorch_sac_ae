@@ -15,7 +15,7 @@ import utils
 from logger import Logger
 from video import VideoRecorder
 
-from sac_ae import SacAeAgent
+from sac_ae import SacAeAgent, BCAgent
 
 
 def parse_args():
@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument('--hidden_dim', default=1024, type=int)
     parser.add_argument('--num_epochs', default=100, type=int)
     # eval
-    parser.add_argument('--eval_freq', default=10000, type=int)
+    parser.add_argument('--eval_freq', default=10, type=int)
     parser.add_argument('--num_eval_episodes', default=10, type=int)
     # critic
     parser.add_argument('--critic_lr', default=1e-3, type=float)
@@ -154,7 +154,7 @@ def make_bcagent(obs_shape, action_shape, args, device):
             critic_beta=args.critic_beta,
             critic_tau=args.critic_tau,
             critic_target_update_freq=args.critic_target_update_freq,
-            encoder_type=args.encoder_type,
+            encoder_type='pixel',
             encoder_feature_dim=args.encoder_feature_dim,
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
@@ -205,7 +205,7 @@ def main():
     )
 
     replay_buffer.load(os.path.join(args.work_dir, 'buffer'))
-
+    print("buffer loaded.")
     expert_agent = make_agent(
         obs_shape=env.state_space.shape,
         action_shape=env.action_space.shape,
@@ -214,7 +214,7 @@ def main():
     )
 
     agent = make_bcagent(
-        obs_shape=env.state_space.shape,
+        obs_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         args=args,
         device=device
@@ -222,7 +222,7 @@ def main():
 
 
     expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
-
+    print("expert loaded.")
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
     start_time = time.time()
@@ -230,12 +230,12 @@ def main():
 
         # evaluate agent periodically
         if step % args.eval_freq == 0:
-            L.log('eval/episode', episode, step)
+            L.log('eval/episode', step, step)
             evaluate(env, agent, video, args.num_eval_episodes, L, step)
             if args.save_model:
                 agent.save(model_dir, step)
 
-        for _ in range(1000):
+        for i in range(10000):
             agent.update(expert_agent, replay_buffer)
 
 
