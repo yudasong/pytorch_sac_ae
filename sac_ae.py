@@ -587,7 +587,7 @@ class BCAgent(object):
             num_layers, num_filters
         ).to(device)
 
-        self.value_net = VFunction(
+        self.value_net = VNet(
             obs_shape, hidden_dim, encoder_type,
             encoder_feature_dim, num_layers, num_filters
         ).to(device)
@@ -643,7 +643,7 @@ class BCAgent(object):
                                  target_Q2) - expert.alpha.detach() * log_pi
 
         current_V = self.value_net(obs)
-        V_loss = F.mse(current_V, target_V)
+        V_loss = F.mse_loss(current_V, target_V)
         self.V_optimizer.zero_grad()
         V_loss.backward()
         self.V_optimizer.step()
