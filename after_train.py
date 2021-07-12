@@ -17,7 +17,6 @@ from video import VideoRecorder
 
 from sac_ae import SacAeAgent, BCAgent
 
-
 def parse_args():
     parser = argparse.ArgumentParser()
     # environment
@@ -161,6 +160,8 @@ def make_bcagent(obs_shape, action_shape, args, device):
             num_layers=args.num_layers,
             num_filters=args.num_filters
     )
+
+
 
 def main():
     args = parse_args()

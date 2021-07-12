@@ -16,6 +16,7 @@ from logger import Logger
 from video import VideoRecorder
 
 from sac_ae import SacAeAgent, BCAgent
+from sac_transfer import SacTransferAgent
 
 
 def parse_args():
@@ -162,6 +163,34 @@ def make_bcagent(obs_shape, action_shape, args, device):
             num_filters=args.num_filters
     )
 
+def make_transfer_agent(obs_shape, action_shape, args, device):
+    return SacTransferAgent(
+            obs_shape=obs_shape,
+            action_shape=action_shape,
+            device=device,
+            hidden_dim=args.hidden_dim,
+            discount=args.discount,
+            init_temperature=args.init_temperature,
+            alpha_lr=args.alpha_lr,
+            alpha_beta=args.alpha_beta,
+            actor_lr=args.actor_lr,
+            actor_beta=args.actor_beta,
+            actor_log_std_min=args.actor_log_std_min,
+            actor_log_std_max=args.actor_log_std_max,
+            actor_update_freq=args.actor_update_freq,
+            critic_lr=args.critic_lr,
+            critic_beta=args.critic_beta,
+            critic_tau=args.critic_tau,
+            critic_target_update_freq=args.critic_target_update_freq,
+            encoder_type='pixel',
+            encoder_feature_dim=args.encoder_feature_dim,
+            encoder_lr=args.encoder_lr,
+            encoder_tau=args.encoder_tau,
+            num_layers=args.num_layers,
+            num_filters=args.num_filters
+    )
+
+
 def main():
     args = parse_args()
     utils.set_seed_everywhere(args.seed)
@@ -219,7 +248,7 @@ def main():
         device=device
     )
 
-    agent = make_agent(
+    agent = make_transfer_agent(
         obs_shape=env.state_space.shape,
         action_shape=env.action_space.shape,
         args=args,
@@ -236,11 +265,11 @@ def main():
 
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
-    L.log('eval/episode', 0, 0)
-    evaluate(env, bc_agent, video, args.num_eval_episodes, L, 0)
+    #L.log('eval/episode', 0, 0)
+    #evaluate(env, bc_agent, video, args.num_eval_episodes, L, 0)
 
 
-    '''
+    
 
     episode, episode_reward, done = 0, 0, True
     start_time = time.time()
@@ -284,7 +313,7 @@ def main():
         if step >= args.init_steps:
             num_updates = args.init_steps if step == args.init_steps else 1
             for _ in range(num_updates):
-                agent.update(replay_buffer, L, step)
+                agent.update(replay_buffer, bc_agent, L, step)
 
         next_obs, next_state, reward, done, _ = env.step(action)
 
@@ -299,7 +328,7 @@ def main():
         obs = next_obs
         state = next_state
         episode_step += 1
-    '''
+    
 
 
 if __name__ == '__main__':
