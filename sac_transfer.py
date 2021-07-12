@@ -219,8 +219,6 @@ class SacTransferAgent(object):
         self.encoder_tau = encoder_tau
         self.actor_update_freq = actor_update_freq
         self.critic_target_update_freq = critic_target_update_freq
-        self.decoder_update_freq = decoder_update_freq
-        self.decoder_latent_lambda = decoder_latent_lambda
         self.encoder_type = encoder_type
 
         self.actor = Actor(
@@ -269,8 +267,6 @@ class SacTransferAgent(object):
         self.training = training
         self.actor.train(training)
         self.critic.train(training)
-        if self.decoder is not None:
-            self.decoder.train(training)
 
     @property
     def alpha(self):
@@ -378,11 +374,6 @@ class SacTransferAgent(object):
         torch.save(
             self.critic.state_dict(), '%s/critic_%s.pt' % (model_dir, step)
         )
-        if self.decoder is not None:
-            torch.save(
-                self.decoder.state_dict(),
-                '%s/decoder_%s.pt' % (model_dir, step)
-            )
 
     def load(self, model_dir, step):
         self.actor.load_state_dict(
@@ -391,7 +382,3 @@ class SacTransferAgent(object):
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
-        if self.decoder is not None:
-            self.decoder.load_state_dict(
-                torch.load('%s/decoder_%s.pt' % (model_dir, step))
-            )

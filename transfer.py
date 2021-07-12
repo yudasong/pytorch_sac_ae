@@ -38,7 +38,7 @@ def parse_args():
     parser.add_argument('--hidden_dim', default=1024, type=int)
     parser.add_argument('--num_epochs', default=100, type=int)
     # eval
-    parser.add_argument('--eval_freq', default=10, type=int)
+    parser.add_argument('--eval_freq', default=10000, type=int)
     parser.add_argument('--num_eval_episodes', default=10, type=int)
     # critic
     parser.add_argument('--critic_lr', default=1e-3, type=float)
@@ -219,7 +219,16 @@ def main():
 
     video = VideoRecorder(video_dir if args.save_video else None)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    from soco_device import DeviceCheck
+
+    dc = DeviceCheck()
+    # will return a device name ('cpu'/'cuda') and a list of gpu ids, if any
+    device_name, device_ids = dc.get_device(n_gpu=1)
+
+    if len(device_ids) == 1:
+        device_name = '{}:{}'.format(device_name, device_ids[0])
+        device = torch.device(device_name)
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
     # the dmc2gym wrapper standardizes actions
     assert env.action_space.low.min() >= -1
@@ -249,7 +258,7 @@ def main():
     )
 
     agent = make_transfer_agent(
-        obs_shape=env.state_space.shape,
+        obs_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         args=args,
         device=device
