@@ -177,7 +177,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    env.model.opt.gravity[2] = -6
+    env.physics.model.opt.gravity[2] = -6
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
@@ -219,7 +219,7 @@ def main():
         device=device
     )
 
-    agent = make_transfer_agent(
+    agent = make_agent(
         obs_shape=env.state_space.shape,
         action_shape=env.action_space.shape,
         args=args,
@@ -231,13 +231,13 @@ def main():
 
     expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
     print("expert loaded.")
-    bc_agent.load(os.path.join(args.work_dir, 'bc_model'),490)
+    bc_agent.load(os.path.join(args.work_dir, 'bc_model'),400)
     print("bc loaded.")
 
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
-    L.log('eval/episode', step, step)
-    evaluate(env, bc_agent, video, args.num_eval_episodes, 0, 0)
+    L.log('eval/episode', 0, 0)
+    evaluate(env, bc_agent, video, args.num_eval_episodes, L, 0)
 
 
     '''

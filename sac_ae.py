@@ -684,8 +684,8 @@ class BCAgent(object):
 
     def load(self, model_dir, step):
         self.actor.load_state_dict(
-            torch.load('%s/actor_%s.pt' % (model_dir, step))
+            torch.load('%s/bc_actor_%s.pt' % (model_dir, step))
         )
-        self.critic.load_state_dict(
-            torch.load('%s/critic_%s.pt' % (model_dir, step))
+        self.value_net.load_state_dict(
+            torch.load('%s/bc_vnet_%s.pt' % (model_dir, step))
         )
