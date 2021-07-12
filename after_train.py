@@ -190,7 +190,14 @@ def main():
 
     video = VideoRecorder(video_dir if args.save_video else None)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    dc = DeviceCheck()
+    # will return a device name ('cpu'/'cuda') and a list of gpu ids, if any
+    device_name, device_ids = dc.get_device(n_gpu=1)
+
+    if len(device_ids) == 1:
+        device_name = '{}:{}'.format(device_name, device_ids[0])
+        device = torch.device(device_name)
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
     # the dmc2gym wrapper standardizes actions
     assert env.action_space.low.min() >= -1

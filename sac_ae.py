@@ -635,10 +635,10 @@ class BCAgent(object):
         actor_loss.backward()
         self.actor_optimizer.step()
 
-    def update_value(self, expert, obs, state, next_state):
+    def update_value(self, expert, obs, state):
         with torch.no_grad():
-            _, policy_action, log_pi, _ = expert.actor(next_state)
-            target_Q1, target_Q2 = expert.critic_target(next_state, policy_action)
+            _, policy_action, log_pi, _ = expert.actor(state)
+            target_Q1, target_Q2 = expert.critic_target(state, policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - expert.alpha.detach() * log_pi
 
@@ -653,7 +653,7 @@ class BCAgent(object):
 
         expert_actions = expert.select_action_batch(state)
         self.update_actor(obs,expert_actions)
-        self.update_value(expert, obs, state, next_state)
+        self.update_value(expert, obs, state)
 
         # if self.encoder_type == 'identity':
         #     self.update_critic(state, action, reward, next_state, not_done, L, step)
