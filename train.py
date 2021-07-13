@@ -50,7 +50,7 @@ def parse_args():
     parser.add_argument('--actor_log_std_max', default=2, type=float)
     parser.add_argument('--actor_update_freq', default=2, type=int)
     # encoder/decoder
-    parser.add_argument('--encoder_type', default='identity', type=str)
+    parser.add_argument('--encoder_type', default='pixel', type=str)
     parser.add_argument('--encoder_feature_dim', default=50, type=int)
     parser.add_argument('--encoder_lr', default=1e-3, type=float)
     parser.add_argument('--encoder_tau', default=0.05, type=float)
@@ -165,7 +165,17 @@ def main():
     with open(os.path.join(args.work_dir, 'args.json'), 'w') as f:
         json.dump(vars(args), f, sort_keys=True, indent=4)
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    from soco_device import DeviceCheck
+
+    dc = DeviceCheck()
+    # will return a device name ('cpu'/'cuda') and a list of gpu ids, if any
+    device_name, device_ids = dc.get_device(n_gpu=1)
+
+    if len(device_ids) == 1:
+        device_name = '{}:{}'.format(device_name, device_ids[0])
+        device = torch.device(device_name)
+
+
     print(device)
     # the dmc2gym wrapper standardizes actions
     assert env.action_space.low.min() >= -1
@@ -181,7 +191,7 @@ def main():
     )
 
     agent = make_agent(
-        obs_shape=env.state_space.shape,
+        obs_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
         args=args,
         device=device

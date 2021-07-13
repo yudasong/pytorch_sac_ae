@@ -189,7 +189,8 @@ def main():
     buffer_dir = utils.make_dir(os.path.join(args.work_dir, 'buffer'))
 
     video = VideoRecorder(video_dir if args.save_video else None)
-
+    
+    from soco_device import DeviceCheck
     dc = DeviceCheck()
     # will return a device name ('cpu'/'cuda') and a list of gpu ids, if any
     device_name, device_ids = dc.get_device(n_gpu=1)

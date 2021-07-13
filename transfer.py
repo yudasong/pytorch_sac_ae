@@ -269,7 +269,7 @@ def main():
 
     expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
     print("expert loaded.")
-    bc_agent.load(os.path.join(args.work_dir, 'bc_model'),400)
+    bc_agent.load(os.path.join(args.work_dir, 'bc_model'),190)
     print("bc loaded.")
 
     L = Logger(args.work_dir, use_tb=args.save_tb)
