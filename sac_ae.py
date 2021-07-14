@@ -626,7 +626,7 @@ class BCAgent(object):
 
     def update_actor(self, obs, exp_action):
         # detach encoder, so we don't update it with the actor loss
-        mu = self.actor(obs, detach_encoder=True)
+        mu = self.actor(obs, detach_encoder=False)
 
         actor_loss = F.mse_loss(mu,exp_action)
 
@@ -654,25 +654,6 @@ class BCAgent(object):
         expert_actions = expert.select_action_batch(state)
         self.update_actor(obs,expert_actions)
         self.update_value(expert, obs, state)
-
-        # if self.encoder_type == 'identity':
-        #     self.update_critic(state, action, reward, next_state, not_done, L, step)
-        # else:
-        #     self.update_critic(obs, action, reward, next_obs, not_done, L, step)
-
-
-        # if step % self.critic_target_update_freq == 0:
-        #     utils.soft_update_params(
-        #         self.critic.Q1, self.critic_target.Q1, self.critic_tau
-        #     )
-        #     utils.soft_update_params(
-        #         self.critic.Q2, self.critic_target.Q2, self.critic_tau
-        #     )
-        #     utils.soft_update_params(
-        #         self.critic.encoder, self.critic_target.encoder,
-        #         self.encoder_tau
-        #     )
-
 
     def save(self, model_dir, step):
         torch.save(

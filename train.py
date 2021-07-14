@@ -190,12 +190,22 @@ def main():
         device=device
     )
 
-    agent = make_agent(
-        obs_shape=env.observation_space.shape,
-        action_shape=env.action_space.shape,
-        args=args,
-        device=device
-    )
+    if args.encoder_type == 'pixel':
+
+        agent = make_agent(
+            obs_shape=env.observation_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
+
+    else:
+        agent = make_agent(
+            obs_shape=env.state_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
 
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
