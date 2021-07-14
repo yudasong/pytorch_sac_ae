@@ -313,8 +313,8 @@ class SacTransferAgent(object):
 
     def update_actor_and_alpha(self, obs, L, step):
         # detach encoder, so we don't update it with the actor loss
-        _, pi, log_pi, log_std = self.actor(obs, detach_encoder=True)
-        actor_Q1, actor_Q2 = self.critic(obs, pi, detach_encoder=True)
+        _, pi, log_pi, log_std = self.actor(obs, detach_encoder=False)
+        actor_Q1, actor_Q2 = self.critic(obs, pi, detach_encoder=False)
 
         actor_Q = torch.min(actor_Q1, actor_Q2)
         actor_loss = (self.alpha.detach() * log_pi - actor_Q).mean()
