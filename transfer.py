@@ -281,9 +281,9 @@ def main():
 
     expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
 
-    if args.expert_encoder_type == 'pixel':
-        agent.warm_start_from(expert_agent)
-
+    #if args.expert_encoder_type == 'pixel':
+    #    agent.warm_start_from(expert_agent)
+    agent.load(os.path.join(args.work_dir, 'model'),990000)
 
     print("expert loaded.")
 
