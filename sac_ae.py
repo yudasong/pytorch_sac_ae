@@ -627,38 +627,47 @@ class BCAgent(object):
             mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
             return pi.cpu().data.numpy().flatten()
 
-    def update_actor(self, obs, exp_action):
+    def update_actor(self, obs, exp_action, L, step):
         # detach encoder, so we don't update it with the actor loss
         mu = self.actor(obs, detach_encoder=False)
 
         actor_loss = F.mse_loss(mu,exp_action)
+
+        L.log('train_actor/loss', actor_loss, step)
 
         # optimize the actor
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
-    def update_value(self, expert, obs, state):
+    def update_value(self, expert, obs, state, L, step):
         with torch.no_grad():
-            _, policy_action, log_pi, _ = expert.actor(state)
-            target_Q1, target_Q2 = expert.critic_target(state, policy_action)
+            if expert.encoder == 'identity':
+                _, policy_action, log_pi, _ = expert.actor(state)
+                target_Q1, target_Q2 = expert.critic_target(state, policy_action)
+            else:
+                _, policy_action, log_pi, _ = expert.actor(obs)
+                target_Q1, target_Q2 = expert.critic_target(obs, policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - expert.alpha.detach() * log_pi
 
         current_V = self.value_net(obs)
         V_loss = F.mse_loss(current_V, target_V)
+
+        L.log('train_critic/loss', V_loss, step)
+
         self.V_optimizer.zero_grad()
         V_loss.backward()
         self.V_optimizer.step()
 
-    def update(self, expert, replay_buffer):
+    def update(self, expert, replay_buffer, L, step):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
         if expert.encoder_type == "identity":
             expert_actions = expert.select_action_batch(state)
         else:
             expert_actions = expert.select_action_batch(obs)
-        self.update_actor(obs,expert_actions)
-        self.update_value(expert, obs, state)
+        self.update_actor(obs,expert_actions, L, step)
+        self.update_value(expert, obs, state, L, step)
 
     def save(self, model_dir, step):
         torch.save(
