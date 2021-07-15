@@ -261,10 +261,10 @@ def main():
             if args.save_model:
                 agent.save(model_dir, step)
 
-        for i in range(10000):
+        for i in range(1000):
             agent.update(expert_agent, replay_buffer, L, i)
-
-        L.log('train/episode', step, 10000)
+        L.log('train/episode', step, 1000)
+        L.dump(1000)
 
 
 if __name__ == '__main__':

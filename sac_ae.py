@@ -642,7 +642,7 @@ class BCAgent(object):
 
     def update_value(self, expert, obs, state, L, step):
         with torch.no_grad():
-            if expert.encoder == 'identity':
+            if expert.encoder_type == 'identity':
                 _, policy_action, log_pi, _ = expert.actor(state)
                 target_Q1, target_Q2 = expert.critic_target(state, policy_action)
             else:
