@@ -52,10 +52,12 @@ def parse_args():
     parser.add_argument('--actor_log_std_max', default=2, type=float)
     parser.add_argument('--actor_update_freq', default=2, type=int)
     # encoder/decoder
-    parser.add_argument('--encoder_type', default='identity', type=str)
+    parser.add_argument('--expert_encoder_type', default='pixel', type=str)
+    parser.add_argument('--encoder_type', default='pixel', type=str)
     parser.add_argument('--encoder_feature_dim', default=50, type=int)
     parser.add_argument('--encoder_lr', default=1e-3, type=float)
     parser.add_argument('--encoder_tau', default=0.05, type=float)
+    parser.add_argument('--expert_decoder_type', default='pixel', type=str)
     parser.add_argument('--decoder_type', default='identity', type=str)
     parser.add_argument('--decoder_lr', default=1e-3, type=float)
     parser.add_argument('--decoder_update_freq', default=1, type=int)
@@ -121,11 +123,11 @@ def make_agent(obs_shape, action_shape, args, device):
             critic_beta=args.critic_beta,
             critic_tau=args.critic_tau,
             critic_target_update_freq=args.critic_target_update_freq,
-            encoder_type=args.encoder_type,
+            encoder_type=args.expert_encoder_type,
             encoder_feature_dim=args.encoder_feature_dim,
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
-            decoder_type=args.decoder_type,
+            decoder_type=args.expert_decoder_type,
             decoder_lr=args.decoder_lr,
             decoder_update_freq=args.decoder_update_freq,
             decoder_latent_lambda=args.decoder_latent_lambda,
@@ -206,7 +208,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    env.physics.model.opt.gravity[2] = -6
+    #env.physics.model.opt.gravity[2] = -6
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
@@ -243,12 +245,22 @@ def main():
         device=device
     )
 
-    expert_agent = make_agent(
-        obs_shape=env.state_space.shape,
-        action_shape=env.action_space.shape,
-        args=args,
-        device=device
-    )
+    
+    if args.expert_encoder_type == 'pixel':
+
+        expert_agent = make_agent(
+            obs_shape=env.observation_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
+
+    else:
+        expert_agent = make_agent(
+            obs_shape=env.state_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device)
 
     bc_agent = make_bcagent(
         obs_shape=env.observation_space.shape,
@@ -268,7 +280,13 @@ def main():
 
 
     expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
+
+    if args.expert_encoder_type == 'pixel':
+        agent.warm_start_from(expert_agent)
+
+
     print("expert loaded.")
+
     bc_agent.load(os.path.join(args.work_dir, 'bc_model'),190)
     print("bc loaded.")
 

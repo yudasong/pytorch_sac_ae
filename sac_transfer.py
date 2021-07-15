@@ -272,6 +272,9 @@ class SacTransferAgent(object):
     def alpha(self):
         return self.log_alpha.exp()
 
+    def warm_start_from(self,expert):
+        self.critic.encoder.duplicate_conv_weights_from(expert.critic.encoder)
+
     def select_action(self, obs):
         with torch.no_grad():
             obs = torch.FloatTensor(obs).to(self.device)
