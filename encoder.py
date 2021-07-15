@@ -9,8 +9,8 @@ def tie_weights(src, trg):
 
 def copy_weights(src, trg):
     assert type(src) == type(trg)
-    trg.weight._copy(src.weight)
-    trg.bias ._copy(src.bias)
+    trg.weight.data.copy_(src.weight)
+    trg.bias.data.copy_(src.bias)
 
 
 OUT_DIM = {2: 39, 4: 35, 6: 31}
