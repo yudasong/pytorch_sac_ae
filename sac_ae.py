@@ -605,6 +605,9 @@ class BCAgent(object):
 
         self.train()
 
+    def warm_start_from(self,expert):
+        self.value_net.encoder.duplicate_conv_weights_from(expert.critic.encoder)
+
     def train(self, training=True):
         self.training = training
         self.actor.train(training)
@@ -650,8 +653,10 @@ class BCAgent(object):
 
     def update(self, expert, replay_buffer):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
-
-        expert_actions = expert.select_action_batch(state)
+        if expert.encoder_type == "identity":
+            expert_actions = expert.select_action_batch(state)
+        else:
+            expert_actions = expert.select_action_batch(obs)
         self.update_actor(obs,expert_actions)
         self.update_value(expert, obs, state)
 

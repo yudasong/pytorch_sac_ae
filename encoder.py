@@ -7,6 +7,11 @@ def tie_weights(src, trg):
     trg.weight = src.weight
     trg.bias = src.bias
 
+def copy_weights(src, trg):
+    assert type(src) == type(trg)
+    trg.weight._copy(src.weight)
+    trg.bias ._copy(src.bias)
+
 
 OUT_DIM = {2: 39, 4: 35, 6: 31}
 
@@ -74,6 +79,10 @@ class PixelEncoder(nn.Module):
         # only tie conv layers
         for i in range(self.num_layers):
             tie_weights(src=source.convs[i], trg=self.convs[i])
+
+    def duplicate_conv_weights_from(self, source):
+        for i in range(self.num_layers):
+            copy_weights(src=source.convs[i], trg=self.convs[i])
 
     def log(self, L, step, log_freq):
         if step % log_freq != 0:
