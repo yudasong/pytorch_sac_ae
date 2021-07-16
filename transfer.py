@@ -310,9 +310,11 @@ def main():
             # evaluate agent periodically
             if step % args.eval_freq == 0:
                 L.log('eval/episode', episode, step)
-                evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
+                #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
+                evaluate(env, agent, video, args.num_eval_episodes, L, step)
                 if args.save_model:
-                    expert_agent.save(model_dir, step)
+                    #expert_agent.save(model_dir, step)
+                    agent.save(model_dir, step)
                 if args.save_buffer:
                     replay_buffer.save(buffer_dir)
 
@@ -332,10 +334,16 @@ def main():
             action = env.action_space.sample()
         else:
             with utils.eval_mode(agent):
+                '''
                 if expert_agent.encoder_type == 'identity':
                     action = expert_agent.sample_action(state)
                 else:
                     action = expert_agent.sample_action(obs)
+                '''
+                if agent.encoder_type == 'identity':
+                    action = agent.sample_action(state)
+                else:
+                    action = agent.sample_action(obs)
 
         # run training update
         if step >= args.init_steps:
