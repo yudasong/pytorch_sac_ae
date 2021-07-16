@@ -385,4 +385,4 @@ class SacTransferAgent(object):
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
-        self.log_alpha = torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step)))
+        self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step))))
