@@ -542,6 +542,8 @@ class SacAeAgent(object):
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
+        self.alpha = torch.load('%s/alpha_%s.pt' % (model_dir, step))
+        print(self.alpha)
         if self.decoder is not None:
             self.decoder.load_state_dict(
                 torch.load('%s/decoder_%s.pt' % (model_dir, step))
