@@ -310,9 +310,9 @@ def main():
             # evaluate agent periodically
             if step % args.eval_freq == 0:
                 L.log('eval/episode', episode, step)
-                evaluate(env, agent, video, args.num_eval_episodes, L, step)
+                evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
                 if args.save_model:
-                    agent.save(model_dir, step)
+                    expert_agent.save(model_dir, step)
                 if args.save_buffer:
                     replay_buffer.save(buffer_dir)
 
@@ -327,21 +327,22 @@ def main():
             L.log('train/episode', episode, step)
 
         # sample action for data collection
-        if step < args.init_steps:
+        #if step < args.init_steps:
+        if False:
             action = env.action_space.sample()
         else:
             with utils.eval_mode(agent):
-                if agent.encoder_type == 'identity':
-                    action = agent.sample_action(state)
+                if expert_agent.encoder_type == 'identity':
+                    action = expert_agent.sample_action(state)
                 else:
-                    action = agent.sample_action(obs)
+                    action = expert_agent.sample_action(obs)
 
         # run training update
         if step >= args.init_steps:
             num_updates = args.init_steps if step == args.init_steps else 1
             for _ in range(num_updates):
                 agent.update(replay_buffer, bc_agent, L, step)
-
+                #expert_agent.update(replay_buffer, L, step)
         next_obs, next_state, reward, done, _ = env.step(action)
 
         # allow infinit bootstrap
