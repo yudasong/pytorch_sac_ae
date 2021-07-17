@@ -303,7 +303,7 @@ class SacTransferAgent(object):
             '''
             target_Q1, target_Q2 = expert.critic_target(next_obs, policy_action)
             target_V = torch.min(target_Q1,
-                                 target_Q2) - self.expert.detach() * log_pi
+                                 target_Q2) - self.alpha.detach() * log_pi
         
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
@@ -357,9 +357,9 @@ class SacTransferAgent(object):
         L.log('train/batch_reward', reward.mean(), step)
 
         if self.encoder_type == 'identity':
-            self.update_critic(bc_agent, state, action, reward, next_state, not_done, L, step)
+            self.update_critic(bc_agent, expert, state, action, reward, next_state, not_done, L, step)
         else:
-            self.update_critic(bc_agent, obs, action, reward, next_obs, not_done, L, step)
+            self.update_critic(bc_agent, expert, obs, action, reward, next_obs, not_done, L, step)
 
         if step % self.actor_update_freq == 0:
             if self.encoder_type == 'identity':
