@@ -291,13 +291,19 @@ class SacTransferAgent(object):
             mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
             return pi.cpu().data.numpy().flatten()
 
-    def update_critic(self, bc_agent, obs, action, reward, next_obs, not_done, L, step):
+    def update_critic(self, bc_agent, expert, obs, action, reward, next_obs, not_done, L, step):
         with torch.no_grad():
             
             _, policy_action, log_pi, _ = self.actor(next_obs)
+            
+            '''
             target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - self.alpha.detach() * log_pi
+            '''
+            target_Q1, target_Q2 = expert.critic_target(next_obs, policy_action)
+            target_V = torch.min(target_Q1,
+                                 target_Q2) - self.expert.detach() * log_pi
         
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
@@ -345,7 +351,7 @@ class SacTransferAgent(object):
         alpha_loss.backward()
         self.log_alpha_optimizer.step()
 
-    def update(self, replay_buffer, bc_agent, L, step):
+    def update(self, replay_buffer, bc_agent, expert, L, step):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
 
         L.log('train/batch_reward', reward.mean(), step)

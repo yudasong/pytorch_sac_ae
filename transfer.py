@@ -349,7 +349,7 @@ def main():
         if step >= args.init_steps:
             num_updates = args.init_steps if step == args.init_steps else 1
             for _ in range(num_updates):
-                agent.update(replay_buffer, bc_agent, L, step)
+                agent.update(replay_buffer, bc_agent, expert_agent, L, step)
                 #expert_agent.update(replay_buffer, L, step)
         next_obs, next_state, reward, done, _ = env.step(action)
 
