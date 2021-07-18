@@ -28,7 +28,7 @@ def parse_args():
     parser.add_argument('--frame_stack', default=3, type=int)
     parser.add_argument('--env_spec', default='full')
     # replay buffer
-    parser.add_argument('--replay_buffer_capacity', default=1200000, type=int)
+    parser.add_argument('--replay_buffer_capacity', default=200000, type=int)
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
     parser.add_argument('--init_steps', default=1000, type=int)
@@ -190,8 +190,6 @@ def main():
         device=device
     )
 
-    replay_buffer.load(os.path.join(args.work_dir, 'buffer'))
-    print("buffer loaded.")
 
     if args.encoder_type == 'pixel':
 
@@ -216,6 +214,8 @@ def main():
     print("expert loaded.")
 
 
+    #replay_buffer.load(os.path.join(args.work_dir, 'buffer'))
+    #print("buffer loaded.")
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
     episode, episode_reward, done = 0, 0, True

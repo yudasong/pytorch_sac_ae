@@ -155,7 +155,7 @@ def make_bcagent(obs_shape, action_shape, args, device):
             critic_beta=args.critic_beta,
             critic_tau=args.critic_tau,
             critic_target_update_freq=args.critic_target_update_freq,
-            encoder_type='pixel',
+            encoder_type=args.encoder_type,
             encoder_feature_dim=args.encoder_feature_dim,
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
@@ -187,7 +187,10 @@ def main():
 
     utils.make_dir(args.work_dir)
     video_dir = utils.make_dir(os.path.join(args.work_dir, 'video'))
-    model_dir = utils.make_dir(os.path.join(args.work_dir, 'bc_model'))
+    if args.encoder_type == 'identity':
+        model_dir = utils.make_dir(os.path.join(args.work_dir, 'bc_model_state'))
+    else:
+        model_dir = utils.make_dir(os.path.join(args.work_dir, 'bc_model'))
     buffer_dir = utils.make_dir(os.path.join(args.work_dir, 'buffer'))
 
     video = VideoRecorder(video_dir if args.save_video else None)
@@ -232,13 +235,20 @@ def main():
             args=args,
             device=device
         )
-
-    agent = make_bcagent(
-        obs_shape=env.observation_space.shape,
-        action_shape=env.action_space.shape,
-        args=args,
-        device=device
-    )
+    if args.encoder_type == 'pixel':
+        agent = make_bcagent(
+            obs_shape=env.observation_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
+    else:
+        agent = make_bcagent(
+            obs_shape=env.state_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
 
 
     expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
