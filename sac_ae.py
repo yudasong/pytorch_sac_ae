@@ -633,9 +633,12 @@ class BCAgent(object):
             mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
             return pi.cpu().data.numpy().flatten()
 
-    def update_actor(self, obs, exp_action, L, step):
+    def update_actor(self, obs, state, exp_action, L, step):
         # detach encoder, so we don't update it with the actor loss
-        mu = self.actor(obs, detach_encoder=False)
+        if self.encoder_type == 'identity':
+            mu = self.actor(state, detach_encoder=False)
+        else:
+            mu = self.actor(obs, detach_encoder=False)
 
         actor_loss = F.mse_loss(mu,exp_action)
 
@@ -656,8 +659,12 @@ class BCAgent(object):
                 target_Q1, target_Q2 = expert.critic_target(obs, policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - expert.alpha.detach() * log_pi
-
-        current_V = self.value_net(obs)
+        
+        if self.encoder_type == 'identity':
+            current_V = self.value_net(state)
+        else:
+            current_V = self.value_net(obs)
+            
         V_loss = F.mse_loss(current_V, target_V)
 
         L.log('train_critic/loss', V_loss, step)
@@ -672,7 +679,9 @@ class BCAgent(object):
             expert_actions = expert.select_action_batch(state)
         else:
             expert_actions = expert.select_action_batch(obs)
-        self.update_actor(obs,expert_actions, L, step)
+
+
+        self.update_actor(obs,state,expert_actions, L, step)
         self.update_value(expert, obs, state, L, step)
 
     def save(self, model_dir, step):
