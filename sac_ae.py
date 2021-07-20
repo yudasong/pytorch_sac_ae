@@ -445,9 +445,9 @@ class SacAeAgent(object):
 
         L.log('train_actor/loss', actor_loss, step)
         L.log('train_actor/target_entropy', self.target_entropy, step)
-        entropy = 0.5 * log_std.shape[1] * (1.0 + np.log(2 * np.pi)
-                                            ) + log_std.sum(dim=-1)
-        L.log('train_actor/entropy', entropy.mean(), step)
+        #entropy = 0.5 * log_std.shape[1] * (1.0 + np.log(2 * np.pi)
+        #                                    ) + log_std.sum(dim=-1)
+        #L.log('train_actor/entropy', entropy.mean(), step)
 
         # optimize the actor
         self.actor_optimizer.zero_grad()
@@ -456,13 +456,13 @@ class SacAeAgent(object):
 
         self.actor.log(L, step)
 
-        self.log_alpha_optimizer.zero_grad()
-        alpha_loss = (self.alpha *
-                      (-log_pi - self.target_entropy).detach()).mean()
-        L.log('train_alpha/loss', alpha_loss, step)
+        #self.log_alpha_optimizer.zero_grad()
+        #alpha_loss = (self.alpha *
+        #              (-log_pi - self.target_entropy).detach()).mean()
+        #L.log('train_alpha/loss', alpha_loss, step)
         L.log('train_alpha/value', self.alpha, step)
-        alpha_loss.backward()
-        self.log_alpha_optimizer.step()
+        #alpha_loss.backward()
+        #self.log_alpha_optimizer.step()
 
     def update_decoder(self, obs, target_obs, L, step):
         h = self.critic.encoder(obs)
@@ -664,7 +664,7 @@ class BCAgent(object):
             current_V = self.value_net(state)
         else:
             current_V = self.value_net(obs)
-            
+
         V_loss = F.mse_loss(current_V, target_V)
 
         L.log('train_critic/loss', V_loss, step)

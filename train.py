@@ -31,7 +31,7 @@ def parse_args():
     parser.add_argument('--replay_buffer_capacity', default=1000000, type=int)
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
-    parser.add_argument('--init_steps', default=1000, type=int)
+    parser.add_argument('--init_steps', default=10000, type=int)
     parser.add_argument('--num_train_steps', default=1000000, type=int)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
@@ -63,7 +63,7 @@ def parse_args():
     parser.add_argument('--num_filters', default=32, type=int)
     # sac
     parser.add_argument('--discount', default=0.99, type=float)
-    parser.add_argument('--init_temperature', default=0.1, type=float)
+    parser.add_argument('--init_temperature', default=0.01, type=float)
     parser.add_argument('--alpha_lr', default=1e-4, type=float)
     parser.add_argument('--alpha_beta', default=0.5, type=float)
     # misc
