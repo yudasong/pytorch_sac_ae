@@ -295,21 +295,23 @@ class SacTransferAgent(object):
         with torch.no_grad():
             
             _, policy_action, log_pi, _ = self.actor(next_obs)
+            #_, policy_action, log_pi, _ = expert.actor(next_obs)
             
-            '''
-            target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
-            target_V = torch.min(target_Q1,
-                                 target_Q2) - self.alpha.detach() * log_pi
-            '''
+            
+            #target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
+            #target_V = torch.min(target_Q1,
+            #                     target_Q2) - self.alpha.detach() * log_pi
+            
             target_Q1, target_Q2 = expert.critic_target(next_obs, policy_action)
             target_V = torch.min(target_Q1,
-                                 target_Q2) - self.alpha.detach() * log_pi
+                                 target_Q2) - expert.alpha.detach() * log_pi
         
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
 
         # get current Q estimates
-        current_Q1, current_Q2 = self.critic(obs, action)
+        #current_Q1, current_Q2 = self.critic(obs, action)
+        current_Q1, current_Q2 = self.critic(obs, action, detach_encoder=False)
         critic_loss = F.mse_loss(current_Q1,
                                  target_Q) + F.mse_loss(current_Q2, target_Q)
         L.log('train_critic/loss', critic_loss, step)
@@ -393,4 +395,6 @@ class SacTransferAgent(object):
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
+        self.critic_target.load_state_dict(self.critic.state_dict())
+        #self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
         self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step))))

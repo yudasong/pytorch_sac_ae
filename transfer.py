@@ -29,11 +29,11 @@ def parse_args():
     parser.add_argument('--frame_stack', default=3, type=int)
     parser.add_argument('--env_spec', default='full')
     # replay buffer
-    parser.add_argument('--replay_buffer_capacity', default=200000, type=int)
+    parser.add_argument('--replay_buffer_capacity', default=100000, type=int)
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
     parser.add_argument('--init_steps', default=1000, type=int)
-    parser.add_argument('--num_train_steps', default=200000, type=int)
+    parser.add_argument('--num_train_steps', default=100000, type=int)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
     parser.add_argument('--num_epochs', default=100, type=int)
@@ -157,7 +157,7 @@ def make_bcagent(obs_shape, action_shape, args, device):
             critic_beta=args.critic_beta,
             critic_tau=args.critic_tau,
             critic_target_update_freq=args.critic_target_update_freq,
-            encoder_type='pixel',
+            encoder_type=args.encoder_type,
             encoder_feature_dim=args.encoder_feature_dim,
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
@@ -184,7 +184,7 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
             critic_beta=args.critic_beta,
             critic_tau=args.critic_tau,
             critic_target_update_freq=args.critic_target_update_freq,
-            encoder_type='pixel',
+            encoder_type=args.encoder_type,
             encoder_feature_dim=args.encoder_feature_dim,
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
@@ -208,7 +208,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    #env.physics.model.opt.gravity[2] = -6
+    env.physics.model.opt.gravity[2] = -18
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
@@ -261,20 +261,39 @@ def main():
             action_shape=env.action_space.shape,
             args=args,
             device=device)
+    if args.encoder_type == 'pixel':
+        bc_agent = make_bcagent(
+            obs_shape=env.observation_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
+        #bc_agent.load(os.path.join(args.work_dir, 'bc_model'),90)
+        #print("bc loaded.")
 
-    bc_agent = make_bcagent(
-        obs_shape=env.observation_space.shape,
-        action_shape=env.action_space.shape,
-        args=args,
-        device=device
-    )
+        agent = make_transfer_agent(
+            obs_shape=env.observation_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
+    else:
 
-    agent = make_transfer_agent(
-        obs_shape=env.observation_space.shape,
-        action_shape=env.action_space.shape,
-        args=args,
-        device=device
-    )
+        bc_agent = make_bcagent(
+            obs_shape=env.state_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
+        #bc_agent.load(os.path.join(args.work_dir, 'bc_model_state'),90)
+        #print("bc loaded.")
+
+        agent = make_transfer_agent(
+            obs_shape=env.state_space.shape,
+            action_shape=env.action_space.shape,
+            args=args,
+            device=device
+        )
 
 
 
@@ -287,8 +306,6 @@ def main():
 
     print("expert loaded.")
 
-    bc_agent.load(os.path.join(args.work_dir, 'bc_model'),190)
-    print("bc loaded.")
 
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
