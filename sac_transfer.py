@@ -294,8 +294,8 @@ class SacTransferAgent(object):
     def update_critic(self, bc_agent, expert, obs, action, reward, next_obs, not_done, L, step):
         with torch.no_grad():
             
-            _, policy_action, log_pi, _ = self.actor(next_obs)
-            #_, policy_action, log_pi, _ = expert.actor(next_obs)
+            #_, policy_action, log_pi, _ = self.actor(next_obs)
+            _, policy_action, log_pi, _ = expert.actor(next_obs)
             
             
             #target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
@@ -334,9 +334,9 @@ class SacTransferAgent(object):
 
         L.log('train_actor/loss', actor_loss, step)
         L.log('train_actor/target_entropy', self.target_entropy, step)
-        entropy = 0.5 * log_std.shape[1] * (1.0 + np.log(2 * np.pi)
-                                            ) + log_std.sum(dim=-1)
-        L.log('train_actor/entropy', entropy.mean(), step)
+        #entropy = 0.5 * log_std.shape[1] * (1.0 + np.log(2 * np.pi)
+        #                                    ) + log_std.sum(dim=-1)
+        #L.log('train_actor/entropy', entropy.mean(), step)
 
         # optimize the actor
         self.actor_optimizer.zero_grad()
@@ -345,13 +345,13 @@ class SacTransferAgent(object):
 
         self.actor.log(L, step)
 
-        self.log_alpha_optimizer.zero_grad()
-        alpha_loss = (self.alpha *
-                      (-log_pi - self.target_entropy).detach()).mean()
-        L.log('train_alpha/loss', alpha_loss, step)
+        #self.log_alpha_optimizer.zero_grad()
+        #alpha_loss = (self.alpha *
+        #              (-log_pi - self.target_entropy).detach()).mean()
+        #L.log('train_alpha/loss', alpha_loss, step)
         L.log('train_alpha/value', self.alpha, step)
-        alpha_loss.backward()
-        self.log_alpha_optimizer.step()
+        #alpha_loss.backward()
+        #self.log_alpha_optimizer.step()
 
     def update(self, replay_buffer, bc_agent, expert, L, step):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
@@ -389,9 +389,9 @@ class SacTransferAgent(object):
         )
 
     def load(self, model_dir, step):
-        self.actor.load_state_dict(
-            torch.load('%s/actor_%s.pt' % (model_dir, step))
-        )
+        #self.actor.load_state_dict(
+        #    torch.load('%s/actor_%s.pt' % (model_dir, step))
+        #)
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )

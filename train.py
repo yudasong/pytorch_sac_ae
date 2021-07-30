@@ -150,6 +150,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
+    env.physics.model.opt.gravity[2] = -15
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':

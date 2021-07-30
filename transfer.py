@@ -67,7 +67,7 @@ def parse_args():
     parser.add_argument('--num_filters', default=32, type=int)
     # sac
     parser.add_argument('--discount', default=0.99, type=float)
-    parser.add_argument('--init_temperature', default=0.1, type=float)
+    parser.add_argument('--init_temperature', default=0.01, type=float)
     parser.add_argument('--alpha_lr', default=1e-4, type=float)
     parser.add_argument('--alpha_beta', default=0.5, type=float)
     # misc
@@ -208,7 +208,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    env.physics.model.opt.gravity[2] = -18
+    env.physics.model.opt.gravity[2] = -15
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
@@ -357,10 +357,14 @@ def main():
                 else:
                     action = expert_agent.sample_action(obs)
                 '''
-                if agent.encoder_type == 'identity':
-                    action = agent.sample_action(state)
+                if np.random.rand() > 0.05:
+                #if True:
+                    if agent.encoder_type == 'identity':
+                        action = agent.sample_action(state)
+                    else:
+                        action = agent.sample_action(obs)
                 else:
-                    action = agent.sample_action(obs)
+                    action = env.action_space.sample()
 
         # run training update
         if step >= args.init_steps:
