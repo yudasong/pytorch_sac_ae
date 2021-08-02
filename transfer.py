@@ -32,7 +32,8 @@ def parse_args():
     parser.add_argument('--replay_buffer_capacity', default=100000, type=int)
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
-    parser.add_argument('--init_steps', default=1000, type=int)
+    parser.add_argument('--init_random_steps', default=1000, type=int)
+    parser.add_argument('--init_expert_steps', default=2000, type=int)
     parser.add_argument('--num_train_steps', default=100000, type=int)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
@@ -346,8 +347,10 @@ def main():
             L.log('train/episode', episode, step)
 
         # sample action for data collection
-        #if step < args.init_steps:
-        if False:
+        if step < args.init_random_steps:
+        #if False:
+            action = env.action_space.sample()
+        elif step < args.init_expert_steps:
             action = env.action_space.sample()
         else:
             with utils.eval_mode(agent):
@@ -367,8 +370,8 @@ def main():
                     action = env.action_space.sample()
 
         # run training update
-        if step >= args.init_steps:
-            num_updates = args.init_steps if step == args.init_steps else 1
+        if step >= args.init_expert_steps:
+            num_updates = args.init_expert_steps if step == args.init_expert_steps else 1
             for _ in range(num_updates):
                 agent.update(replay_buffer, bc_agent, expert_agent, L, step)
                 #expert_agent.update(replay_buffer, L, step)
