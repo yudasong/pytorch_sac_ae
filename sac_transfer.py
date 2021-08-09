@@ -295,9 +295,9 @@ class SacTransferAgent(object):
         with torch.no_grad():
             
             
-            _, policy_action, log_pi, _ = expert.actor(next_obs)
-            target_Q1, target_Q2 = expert.critic_target(next_obs, policy_action)
-            target_V = torch.min(target_Q1,target_Q2) - expert.alpha.detach() * log_pi
+            _, policy_action, log_pi, _ = self.actor(next_obs)
+            target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
+            target_V = torch.min(target_Q1,target_Q2) - self.alpha.detach() * log_pi
             target_Q = reward + (not_done * self.discount * target_V)
             '''
             target_V = torch.zeros(len(obs),1).to(self.device)
@@ -307,9 +307,12 @@ class SacTransferAgent(object):
                 target_V = target_V + torch.min(target_Q1,
                                  target_Q2) - expert.alpha.detach() * log_pi
             target_V = target_V / 10
+            '''
+            
+             
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
-            '''    
+                         
         # get current Q estimates
         #current_Q1, current_Q2 = self.critic(obs, action)
         current_Q1, current_Q2 = self.critic(obs, action, detach_encoder=False)
@@ -390,12 +393,12 @@ class SacTransferAgent(object):
         )
 
     def load(self, model_dir, step):
-        #self.actor.load_state_dict(
-        #    torch.load('%s/actor_%s.pt' % (model_dir, step))
-        #)
-        #self.critic.load_state_dict(
-        #    torch.load('%s/critic_%s.pt' % (model_dir, step))
-        #)
-        #self.critic_target.load_state_dict(self.critic.state_dict())
+        self.actor.load_state_dict(
+            torch.load('%s/actor_%s.pt' % (model_dir, step))
+        )
+        self.critic.load_state_dict(
+            torch.load('%s/critic_%s.pt' % (model_dir, step))
+        )
+        self.critic_target.load_state_dict(self.critic.state_dict())
         #self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
         self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step))))

@@ -29,12 +29,12 @@ def parse_args():
     parser.add_argument('--frame_stack', default=3, type=int)
     parser.add_argument('--env_spec', default='full')
     # replay buffer
-    parser.add_argument('--replay_buffer_capacity', default=100000, type=int)
+    parser.add_argument('--replay_buffer_capacity', default=150000, type=int)
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
     parser.add_argument('--init_random_steps', default=1000, type=int)
-    parser.add_argument('--init_expert_steps', default=2000, type=int)
-    parser.add_argument('--num_train_steps', default=100000, type=int)
+    parser.add_argument('--init_expert_steps', default=0, type=int)
+    parser.add_argument('--num_train_steps', default=150000, type=int)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
     parser.add_argument('--num_epochs', default=100, type=int)
@@ -73,6 +73,7 @@ def parse_args():
     parser.add_argument('--alpha_beta', default=0.5, type=float)
     # misc
     parser.add_argument('--seed', default=1, type=int)
+    parser.add_argument('--expert_dir', default='.', type=str)
     parser.add_argument('--work_dir', default='.', type=str)
     parser.add_argument('--save_tb', default=False, action='store_true')
     parser.add_argument('--save_model', default=True, action='store_true')
@@ -102,6 +103,7 @@ def evaluate(env, agent, video, num_episodes, L, step):
         video.save('%d.mp4' % step)
         L.log('eval/episode_reward', episode_reward, step)
     L.dump(step)
+
 
 
 def make_agent(obs_shape, action_shape, args, device):
@@ -209,16 +211,17 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    #env.physics.model.opt.gravity[2] = -15
+    env.physics.model.opt.gravity[2] = -5
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
     env = utils.FrameStack(env, k=args.frame_stack)
 
     utils.make_dir(args.work_dir)
-    video_dir = utils.make_dir(os.path.join(args.work_dir, "transfer", 'video'))
-    model_dir = utils.make_dir(os.path.join(args.work_dir, "transfer", 'model'))
-    buffer_dir = utils.make_dir(os.path.join(args.work_dir,"transfer", 'buffer'))
+    
+    video_dir = utils.make_dir(os.path.join(args.work_dir, 'video'))
+    model_dir = utils.make_dir(os.path.join(args.work_dir, 'model'))
+    buffer_dir = utils.make_dir(os.path.join(args.work_dir, 'buffer'))
 
     video = VideoRecorder(video_dir if args.save_video else None)
 
@@ -299,11 +302,11 @@ def main():
 
 
 
-    expert_agent.load(os.path.join(args.work_dir, 'model'),990000)
+    expert_agent.load(os.path.join(args.expert_dir, 'model'),990000)
 
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
-    agent.load(os.path.join(args.work_dir, 'model'),990000)
+    agent.load(os.path.join(args.expert_dir, 'model'),990000)
 
     print("expert loaded.")
 
@@ -349,9 +352,16 @@ def main():
         # sample action for data collection
         if step < args.init_random_steps:
         #if False:
-            action = env.action_space.sample()
+            action = env.action_space.sample()        
+        
         elif step < args.init_expert_steps:
-            action = env.action_space.sample()
+            
+            if expert_agent.encoder_type == 'identity':
+                action = expert_agent.sample_action(state)
+            else:
+                action = expert_agent.sample_action(obs)
+        
+        
         else:
             with utils.eval_mode(agent):
                 '''
@@ -360,8 +370,8 @@ def main():
                 else:
                     action = expert_agent.sample_action(obs)
                 '''
-                if np.random.rand() > 0.05:
-                #if True:
+                #if np.random.rand() > 0.05:
+                if True:
                     if agent.encoder_type == 'identity':
                         action = agent.sample_action(state)
                     else:
@@ -370,8 +380,15 @@ def main():
                     action = env.action_space.sample()
 
         # run training update
-        if step >= args.init_expert_steps:
-            num_updates = args.init_expert_steps if step == args.init_expert_steps else 1
+
+        
+        #if step >= args.init_expert_steps:
+        #    num_updates = args.init_expert_steps if step == args.init_expert_steps else 1
+        
+
+        if step >= args.init_random_steps:
+            num_updates = args.init_random_steps if step == args.init_random_steps else 1
+        
             for _ in range(num_updates):
                 agent.update(replay_buffer, bc_agent, expert_agent, L, step)
                 #expert_agent.update(replay_buffer, L, step)
@@ -382,7 +399,6 @@ def main():
             done
         )
         episode_reward += reward
-
         replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool)
 
         obs = next_obs
@@ -390,6 +406,15 @@ def main():
         episode_step += 1
     
 
+    step += 1
+    L.log('eval/episode', episode, step)
+    #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
+    evaluate(env, agent, video, args.num_eval_episodes, L, step)
+    if args.save_model:
+        #expert_agent.save(model_dir, step)
+        agent.save(model_dir, step)
+    if args.save_buffer:
+        replay_buffer.save(buffer_dir)
 
 if __name__ == '__main__':
     main()

@@ -527,6 +527,9 @@ class SacAeAgent(object):
             self.critic.state_dict(), '%s/critic_%s.pt' % (model_dir, step)
         )
         torch.save(
+            self.critic_target.state_dict(), '%s/critic_target_%s.pt' % (model_dir, step)
+        )
+        torch.save(
             self.alpha, '%s/alpha_%s.pt' % (model_dir, step)
         )
         if self.decoder is not None:

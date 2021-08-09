@@ -75,9 +75,9 @@ class ReplayBuffer(object):
         # the proprioceptive obs is stored as float32, pixels obs as uint8
         obs_dtype = np.uint8
 
-        self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        #self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
         self.states = np.empty((capacity, *state_shape), dtype=np.float32)
-        self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        #self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
         self.next_states = np.empty((capacity, *state_shape), dtype=np.float32)
         self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
@@ -88,11 +88,11 @@ class ReplayBuffer(object):
         self.full = False
 
     def add(self, obs, state, action, reward, next_obs, next_state, done):
-        np.copyto(self.obses[self.idx], obs)
+        #np.copyto(self.obses[self.idx], obs)
         np.copyto(self.states[self.idx],state)
         np.copyto(self.actions[self.idx], action)
         np.copyto(self.rewards[self.idx], reward)
-        np.copyto(self.next_obses[self.idx], next_obs)
+        #np.copyto(self.next_obses[self.idx], next_obs)
         np.copyto(self.next_states[self.idx],next_state)
         np.copyto(self.not_dones[self.idx], not done)
 
@@ -104,26 +104,26 @@ class ReplayBuffer(object):
             0, self.capacity if self.full else self.idx, size=self.batch_size
         )
 
-        obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
+        #obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
         states = torch.as_tensor(self.states[idxs], device=self.device).float()
         actions = torch.as_tensor(self.actions[idxs], device=self.device)
         rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
-        next_obses = torch.as_tensor(
-            self.next_obses[idxs], device=self.device
-        ).float()
+        #next_obses = torch.as_tensor(
+        #    self.next_obses[idxs], device=self.device
+        #).float()
         next_states = torch.as_tensor(self.next_states[idxs], device=self.device).float()
         not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
 
-        return obses,states, actions, rewards, next_obses, next_states, not_dones
-
+        #return obses,states, actions, rewards, next_obses, next_states, not_dones
+        return states,states, actions, rewards, next_states, next_states, not_dones
     def save(self, save_dir):
         if self.idx == self.last_save:
             return
         path = os.path.join(save_dir, '%d_%d.pt' % (self.last_save, self.idx))
         payload = [
-            self.obses[self.last_save:self.idx],
+            #self.obses[self.last_save:self.idx],
             self.states[self.last_save:self.idx],
-            self.next_obses[self.last_save:self.idx],
+            #self.next_obses[self.last_save:self.idx],
             self.next_states[self.last_save:self.idx],
             self.actions[self.last_save:self.idx],
             self.rewards[self.last_save:self.idx],
@@ -140,9 +140,9 @@ class ReplayBuffer(object):
             path = os.path.join(save_dir, chunk)
             payload = torch.load(path)
             assert self.idx == start
-            self.obses[start:end] = payload[0]
+            #self.obses[start:end] = payload[0]
             self.states[start:end] = payload[1]
-            self.next_obses[start:end] = payload[2]
+            #self.next_obses[start:end] = payload[2]
             self.next_states[start:end] = payload[3]
             self.actions[start:end] = payload[4]
             self.rewards[start:end] = payload[5]
