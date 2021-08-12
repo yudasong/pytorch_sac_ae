@@ -99,6 +99,12 @@ class ReplayBuffer(object):
         self.idx = (self.idx + 1) % self.capacity
         self.full = self.full or self.idx == 0
 
+    def get_recent_states(self, k):
+        if self.idx > k:
+            return torch.as_tensor(self.next_states[self.idx-k:self.idx], device=self.device)
+        else:
+            return torch.as_tensor(self.next_states[:self.idx], device=self.device)
+
     def sample(self):
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx, size=self.batch_size
