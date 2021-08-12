@@ -237,6 +237,19 @@ class SacTransferAgent(object):
             encoder_feature_dim, num_layers, num_filters
         ).to(device)
 
+        '''
+        self.real_critic = Critic(
+            obs_shape, action_shape, hidden_dim, encoder_type,
+            encoder_feature_dim, num_layers, num_filters
+        ).to(device)
+
+
+        self.real_critic_target = Critic(
+            obs_shape, action_shape, hidden_dim, encoder_type,
+            encoder_feature_dim, num_layers, num_filters
+        ).to(device)
+        '''
+
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         self.ag_critic = Critic(
@@ -303,16 +316,16 @@ class SacTransferAgent(object):
 
     def update_critic(self, bc_agent, expert, obs, action, reward, next_obs, not_done, L, step):
         with torch.no_grad():
-            
-            
+
+            '''
             _, policy_action, log_pi, _ = self.actor(next_obs)
             target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
             target_V = torch.min(target_Q1,target_Q2) - self.alpha.detach() * log_pi
             target_Q = reward + (not_done * self.discount * target_V)
-            
+
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
-                         
+
         # get current Q estimates
         #current_Q1, current_Q2 = self.critic(obs, action)
         current_Q1, current_Q2 = self.critic(obs, action, detach_encoder=False)
@@ -330,20 +343,20 @@ class SacTransferAgent(object):
 
     def update_ag_critic(self, bc_agent, expert, obs, action, reward, next_obs, not_done, L, step):
         with torch.no_grad():
-            
-            
-            
+
+
+
             target_V = torch.zeros(len(obs),1).to(self.device)
             for i in range(10):
                 _, policy_action, log_pi, _ = expert.actor(next_obs)
                 target_Q1, target_Q2 = expert.critic_target(next_obs, policy_action)
                 target_V = target_V + torch.min(target_Q1,
                                  target_Q2) - expert.alpha.detach() * log_pi
-            target_V = target_V / 10            
-             
+            target_V = target_V / 10
+
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
-                         
+
         # get current Q estimates
         #current_Q1, current_Q2 = self.critic(obs, action)
         current_Q1, current_Q2 = self.ag_critic(obs, action, detach_encoder=False)

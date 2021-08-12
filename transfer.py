@@ -33,7 +33,7 @@ def parse_args():
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
     parser.add_argument('--init_random_steps', default=1000, type=int)
-    parser.add_argument('--init_expert_steps', default=0, type=int)
+    parser.add_argument('--init_expert_steps', default=2000, type=int)
     parser.add_argument('--num_train_steps', default=150000, type=int)
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
@@ -370,8 +370,8 @@ def main():
                 else:
                     action = expert_agent.sample_action(obs)
                 '''
-                #if np.random.rand() > 0.05:
-                if True:
+                if np.random.rand() > 0.05:
+                #if True:
                     if agent.encoder_type == 'identity':
                         action = agent.sample_action(state)
                     else:
@@ -382,12 +382,12 @@ def main():
         # run training update
 
         
-        #if step >= args.init_expert_steps:
-        #    num_updates = args.init_expert_steps if step == args.init_expert_steps else 1
+        if step >= args.init_expert_steps:
+            num_updates = args.init_expert_steps if step == args.init_expert_steps else 1
         
 
-        if step >= args.init_random_steps:
-            num_updates = args.init_random_steps if step == args.init_random_steps else 1
+        #if step >= args.init_random_steps:
+        #    num_updates = args.init_random_steps if step == args.init_random_steps else 1
         
             for _ in range(num_updates):
                 agent.update(replay_buffer, bc_agent, expert_agent, L, step)
