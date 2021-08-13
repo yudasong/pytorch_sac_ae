@@ -546,7 +546,7 @@ class SacAeAgent(object):
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
         self.critic.load_state_dict(
-            torch.load('%s/critic_target_%s.pt' % (model_dir, step))
+            torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
         self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step))))
         print(self.alpha)

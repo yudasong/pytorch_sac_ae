@@ -85,6 +85,9 @@ class RBFLinearCost:
             out = torch.cos(out)*torch.sqrt(2/self.feature_dim)
         return out
 
+    def update_expert_data(self,data):
+        self.expert_data = data
+
     def update_bandwidth(self, data):
         num_data = data.shape[0]
         idxs_0 = torch.randint(low=0, high=num_data, size=(self.bw_samples,))

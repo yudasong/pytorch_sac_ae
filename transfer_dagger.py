@@ -18,6 +18,7 @@ from video import VideoRecorder
 from sac_ae import SacAeAgent, BCAgent
 from sac_transfer import SacTransferAgent
 
+from linear_cost import RBFLinearCost
 
 def parse_args():
     parser = argparse.ArgumentParser()
@@ -31,6 +32,7 @@ def parse_args():
     
     # replay buffer
     parser.add_argument('--replay_buffer_capacity', default=150000, type=int)
+    parser.add_argument('--expert_replay_buffer_capacity', default=1000000, type=int)
     parser.add_argument('--imitation_replay_buffer_capacity', default=1000000, type=int)
     parser.add_argument('--imitation_rollout_buffer_capacity', default=100000, type=int)
 
@@ -199,6 +201,64 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
             num_filters=args.num_filters
     )
 
+def dac(agent, env, cost_function, imitation_replay_buffer):
+    episode, episode_reward, done = 0, 0, True
+    start_time = time.time()
+    for step in range(args.num_train_steps):
+        if done:
+            if step > 0:
+                # L.log('train/duration', time.time() - start_time, step)
+                # start_time = time.time()
+                # L.dump(step)
+
+            obs, state = env.reset()
+            done = False
+            episode_reward = 0
+            episode_step = 0
+            episode += 1
+
+        # sample action for data collection
+        if step < args.init_random_steps:
+        #if False:
+            action = env.action_space.sample()        
+        
+        elif step < args.init_expert_steps:
+            
+            if expert_agent.encoder_type == 'identity':
+                action = agent.sample_action(state)
+            else:
+                action = agent.sample_action(obs)
+        
+        
+        else:
+            with utils.eval_mode(agent):
+
+                if agent.encoder_type == 'identity':
+                    action = agent.sample_action(state)
+                else:
+                    action = agent.sample_action(obs)
+        
+        if step >= args.init_random_steps:
+            num_updates = args.init_random_steps if step == args.init_random_steps else 1
+        
+            for _ in range(num_updates):
+                agent.update(replay_buffer, bc_agent, expert_agent, L, step)
+                #expert_agent.update(replay_buffer, L, step)
+        next_obs, next_state, _, done, _ = env.step(action)
+        reward = -cost_function.get_cost(state)
+
+        # allow infinit bootstrap
+        done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
+            done
+        )
+        episode_reward += reward
+        replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool)
+
+        obs = next_obs
+        state = next_state
+        episode_step += 1
+
+
 
 def main():
     args = parse_args()
@@ -216,6 +276,18 @@ def main():
     )
     env.seed(args.seed)
     env.physics.model.opt.gravity[2] = -5
+
+    source_env = dmc2gym.make(
+        domain_name=args.domain_name,
+        task_name=args.task_name,
+        seed=args.seed,
+        visualize_reward=False,
+        spec=args.env_spec,
+        height=args.image_size,
+        width=args.image_size,
+        frame_skip=args.action_repeat
+    )
+    source_env.seed(args.seed)
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
@@ -298,7 +370,7 @@ def main():
             device=device)
 
         imitation_agent = make_agent(
-            obs_shape=env.state_space.shape,
+            obs_shape=env.observation_space.shape,
             action_shape=env.action_space.shape,
             args=args,
             device=device
@@ -342,10 +414,12 @@ def main():
 
 
     expert_agent.load(os.path.join(args.expert_dir, 'model'),990000)
+    expert_replay_buffer.load(os.path.join(args.expert_dir, 'buffer'))
 
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
     agent.load(os.path.join(args.expert_dir, 'model'),990000)
+
 
     print("expert loaded.")
 
@@ -356,7 +430,7 @@ def main():
     #evaluate(env, bc_agent, video, args.num_eval_episodes, L, 0)
 
 
-    
+    cost_function = None
 
     episode, episode_reward, done = 0, 0, True
     start_time = time.time()
@@ -387,6 +461,21 @@ def main():
             episode += 1
 
             L.log('train/episode', episode, step)
+
+            if not cost_function and episode != 0:
+                recent_states = replay_buffer.get_recent_states()
+                cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
+
+            elif episode != 0:
+                recent_states = replay_buffer.get_recent_states()
+                cost_function.update_expert_data(recent_states)
+                cost_function.update_bandwidth(recent_states)
+
+            if cost_function:
+                dac(imitation_agent, source_env, cost_function, imitation_replay_buffer)
+
+
+
 
         # sample action for data collection
         if step < args.init_random_steps:

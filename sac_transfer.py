@@ -316,8 +316,6 @@ class SacTransferAgent(object):
 
     def update_critic(self, bc_agent, expert, obs, action, reward, next_obs, not_done, L, step):
         with torch.no_grad():
-
-            '''
             _, policy_action, log_pi, _ = self.actor(next_obs)
             target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
             target_V = torch.min(target_Q1,target_Q2) - self.alpha.detach() * log_pi

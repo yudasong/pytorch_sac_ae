@@ -99,7 +99,7 @@ class ReplayBuffer(object):
         self.idx = (self.idx + 1) % self.capacity
         self.full = self.full or self.idx == 0
 
-    def get_recent_states(self, k):
+    def get_recent_states(self, k=1000000):
         if self.idx > k:
             return torch.as_tensor(self.next_states[self.idx-k:self.idx], device=self.device)
         else:
