@@ -97,8 +97,8 @@ class RBFLinearCost:
         self.rff.weight.data = self.init_rand_weight/(bw+1e-8)
         #return bw
 
-    def update(self, policy_buffer):
-        policy_data = torch.cat([policy_buffer.states[:-1], policy_buffer.actions], dim=-1).view(-1, self.input_dim)
+    def update(self, policy_data):
+        #policy_data = torch.cat([policy_buffer.states[:-1], policy_buffer.actions], dim=-1).view(-1, self.input_dim)
         #TODO: Should we update bandwidth??
 
         phi = self.get_rep(policy_data).mean(0)
@@ -106,7 +106,7 @@ class RBFLinearCost:
 
         self.w = feat_diff
 
-        return {'mmd': torch.dot(self.w, feat_diff).item()}
+        return torch.dot(self.w, feat_diff).item()
 
     def get_costs(self, x):
         data = self.get_rep(x)

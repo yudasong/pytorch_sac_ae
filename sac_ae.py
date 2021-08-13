@@ -519,6 +519,34 @@ class SacAeAgent(object):
         if self.decoder is not None and step % self.decoder_update_freq == 0:
             self.update_decoder(obs, obs, L, step)
 
+    def post_update_critic(self,replay_buffer, imitation_replay_buffer, step):
+        if np.random.rand() > 0.5:
+            obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
+        else:
+            obs, state, action, reward, next_obs, next_state, not_done = imitation_replay_buffer.sample()
+
+        if self.encoder_type == 'identity':
+            self.update_critic(state, action, reward, next_state, not_done, L, step)
+        else:
+            self.update_critic(obs, action, reward, next_obs, not_done, L, step)
+
+        if step % self.critic_target_update_freq == 0:
+            utils.soft_update_params(
+                self.critic.Q1, self.critic_target.Q1, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.Q2, self.critic_target.Q2, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.encoder, self.critic_target.encoder,
+                self.encoder_tau
+            )
+
+        if self.decoder is not None and step % self.decoder_update_freq == 0:
+            self.update_decoder(obs, obs, L, step)
+
+
+
     def save(self, model_dir, step):
         torch.save(
             self.actor.state_dict(), '%s/actor_%s.pt' % (model_dir, step)

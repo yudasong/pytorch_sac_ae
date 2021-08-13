@@ -122,6 +122,7 @@ class ReplayBuffer(object):
 
         #return obses,states, actions, rewards, next_obses, next_states, not_dones
         return states,states, actions, rewards, next_states, next_states, not_dones
+        
     def save(self, save_dir):
         if self.idx == self.last_save:
             return
