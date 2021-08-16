@@ -101,9 +101,9 @@ class ReplayBuffer(object):
 
     def get_recent_states(self, k=1000000):
         if self.idx > k:
-            return torch.as_tensor(self.next_states[self.idx-k:self.idx], device=self.device)
+            return self.next_states[self.idx-k:self.idx]
         else:
-            return torch.as_tensor(self.next_states[:self.idx], device=self.device)
+            return self.next_states[:self.idx]
 
     def sample(self):
         idxs = np.random.randint(
