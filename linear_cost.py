@@ -76,8 +76,8 @@ class RBFLinearCost:
             raise NotImplementedError("This update type is not available")
 
         # Compute Expert Phi Mean
-        self.expert_rep = self.get_rep(expert_data)
-        self.phi_e = self.expert_rep.mean(dim=0)
+        expert_rep = self.get_rep(torch.as_tensor(expert_data, device=self.device))
+        self.phi_e = expert_rep.mean(dim=0)
 
         self.w = torch.rand(self.phi_e.shape).to(device)
 
@@ -89,8 +89,11 @@ class RBFLinearCost:
 
     def update_expert_data(self,data):
         self.expert_data = data
+        expert_rep = self.get_rep(torch.as_tensor(self.expert_data, device=self.device))
+        self.phi_e = expert_rep.mean(dim=0)
 
     def update_bandwidth(self, data):
+        data = torch.as_tensor(data, device=self.device)
         num_data = data.shape[0]
         idxs_0 = torch.randint(low=0, high=num_data, size=(self.bw_samples,))
         idxs_1 = torch.randint(low=0, high=num_data, size=(self.bw_samples,))
@@ -111,6 +114,7 @@ class RBFLinearCost:
         return torch.dot(self.w, feat_diff).item()
 
     def get_costs(self, x):
+        x = torch.as_tensor(x, device=self.device)
         data = self.get_rep(x)
         if self.cost_range is not None:
             return torch.clamp(torch.matmul(data, self.w).unsqueeze(-1), self.c_min, self.c_max)
