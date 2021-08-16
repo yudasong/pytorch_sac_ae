@@ -19,7 +19,7 @@ args = parser.parse_args()
 mpl.style.use('seaborn')
 
 seeds = list(range(125,129))
-
+#seeds = [125,126,127]
 
 fig, ax = plt.subplots()
 for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
@@ -28,12 +28,13 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
 for item in (ax.get_xticklabels() + ax.get_yticklabels()):
     item.set_fontsize(20)
 
-alg_list = ["sac_q", "sac_aq", "agtr_q", "agtr_aq"]
+alg_list = ["sac_aq", "agtr_q", "agtr_aq", "agtr_aq_2Q", "agtr_aq_dag"]
 
 for alg in alg_list:
 	rewards = []
 	for seed in seeds:
 		file = os.path.join("save", args.env, str(seed), alg, 'eval.log')
+		print(file)
 		data = pd.read_json(file, lines=True)
 		rewards.append(data['episode_reward'].to_numpy())
 		timesteps = data['step'].to_numpy()
@@ -49,6 +50,6 @@ ax.set_xlabel("number of timesteps")
 ax.set_ylabel("rewards")
 
 plt.legend(fontsize=16, loc='center right')
-plt.title("cheetah 0.5",fontsize=24)
+plt.title(args.env,fontsize=24)
 
-plt.savefig("{}_05.pdf".format(args.env),bbox_inches='tight')
+plt.savefig("{}.pdf".format(args.env),bbox_inches='tight')

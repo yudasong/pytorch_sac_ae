@@ -17,7 +17,13 @@ FORMAT_CONFIG = {
             ('critic_loss', 'CLOSS', 'float'), ('ae_loss', 'RLOSS', 'float'),
             ('alpha_value', 'AVALUE', 'float')
         ],
-        'eval': [('step', 'S', 'int'), ('episode_reward', 'ER', 'float')]
+        'eval': [('step', 'S', 'int'), ('episode_reward', 'ER', 'float')],
+        'imitation': [
+            ('episode', 'E', 'int'), ('step', 'S', 'int'),
+            ('mmd_loss', 'MMD', 'float'), ('episode_reward', 'R', 'float'),
+            ('batch_reward', 'BR', 'float'), ('actor_loss', 'ALOSS', 'float'),
+            ('critic_loss', 'CLOSS', 'float'), ('alpha_value', 'AVALUE', 'float')
+        ],
     }
 }
 
@@ -44,17 +50,21 @@ class MetersGroup(object):
         self._meters = defaultdict(AverageMeter)
 
     def log(self, key, value, n=1):
-        self._meters[key].update(value, n)
 
+        self._meters[key].update(value, n)
+        #print(len(self._meters))
     def _prime_meters(self):
         data = dict()
         for key, meter in self._meters.items():
             if key.startswith('train'):
                 key = key[len('train') + 1:]
-            else:
+            elif key.startswith('eval'):
                 key = key[len('eval') + 1:]
+            else:
+                key = key[len('imitation')+1:]
             key = key.replace('/', '_')
             data[key] = meter.value()
+            #print(data)
         return data
 
     def _dump_to_file(self, data):
@@ -74,7 +84,13 @@ class MetersGroup(object):
         return template % (key, value)
 
     def _dump_to_console(self, data, prefix):
-        prefix = colored(prefix, 'yellow' if prefix == 'train' else 'green')
+        if prefix == 'train':
+            prefix = colored(prefix, 'yellow')
+        elif prefix == 'eval':
+            prefix = colored(prefix, 'green')
+        else:
+            prefix = colored(prefix, 'blue')
+        #prefix = colored(prefix, 'yellow' if prefix == 'train' else 'green')
         pieces = ['{:5}'.format(prefix)]
         for key, disp_key, ty in self._formating:
             value = data.get(key, 0)
@@ -82,7 +98,9 @@ class MetersGroup(object):
         print('| %s' % (' | '.join(pieces)))
 
     def dump(self, step, prefix):
+        #print(len(self._meters))
         if len(self._meters) == 0:
+            #print("???")
             return
         data = self._prime_meters()
         data['step'] = step
@@ -104,6 +122,10 @@ class Logger(object):
         self._train_mg = MetersGroup(
             os.path.join(log_dir, 'train.log'),
             formating=FORMAT_CONFIG[config]['train']
+        )
+        self._imitation_mg = MetersGroup(
+            os.path.join(log_dir, 'imitation.log'),
+            formating=FORMAT_CONFIG[config]['imitation']
         )
         self._eval_mg = MetersGroup(
             os.path.join(log_dir, 'eval.log'),
@@ -131,13 +153,20 @@ class Logger(object):
             self._sw.add_histogram(key, histogram, step)
 
     def log(self, key, value, step, n=1):
-        assert key.startswith('train') or key.startswith('eval')
+        assert key.startswith('train') or key.startswith('eval') or key.startswith('imitation')
         if type(value) == torch.Tensor:
             value = value.item()
         self._try_sw_log(key, value / n, step)
-        mg = self._train_mg if key.startswith('train') else self._eval_mg
-        mg.log(key, value, n)
+        if key.startswith('train'):
+            mg = self._train_mg
+        elif key.startswith('eval'):
+            mg = self._eval_mg
+        else:
+            mg = self._imitation_mg
+        #mg = self._train_mg if key.startswith('train') else self._eval_mg
 
+        mg.log(key, value, n)
+        #print(key)
     def log_param(self, key, param, step):
         self.log_histogram(key + '_w', param.weight.data, step)
         if hasattr(param.weight, 'grad') and param.weight.grad is not None:
@@ -148,17 +177,18 @@ class Logger(object):
                 self.log_histogram(key + '_b_g', param.bias.grad.data, step)
 
     def log_image(self, key, image, step):
-        assert key.startswith('train') or key.startswith('eval')
+        assert key.startswith('train') or key.startswith('eval') or key.startswith('imitation')
         self._try_sw_log_image(key, image, step)
 
     def log_video(self, key, frames, step):
-        assert key.startswith('train') or key.startswith('eval')
+        assert key.startswith('train') or key.startswith('eval') or key.startswith('imitation')
         self._try_sw_log_video(key, frames, step)
 
     def log_histogram(self, key, histogram, step):
-        assert key.startswith('train') or key.startswith('eval')
+        assert key.startswith('train') or key.startswith('eval') or key.startswith('imitation')
         self._try_sw_log_histogram(key, histogram, step)
 
     def dump(self, step):
         self._train_mg.dump(step, 'train')
         self._eval_mg.dump(step, 'eval')
+        self._imitation_mg.dump(step, 'imitation')

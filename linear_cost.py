@@ -60,7 +60,7 @@ class RBFLinearCost:
         # Define Phi and Cost weights
         self.rff = nn.Linear(input_dim, feature_dim)
         self.rff.to(device)
-        self.rff.bias.data = (torch.rand_like(self.rff.bias.data)-0.5)*2.0*torch.pi
+        self.rff.bias.data = (torch.rand_like(self.rff.bias.data)-0.5)*2.0*np.pi
         self.init_rand_weight = torch.rand_like(self.rff.weight.data)
         self.init_rand_weight.to(device)
         self.update_bandwidth(self.expert_data)
@@ -69,7 +69,7 @@ class RBFLinearCost:
         # W Update Init
         self.T = T
         self.w_bar = None
-        self.w = None
+        #self.w = None
         self.w_ctr, self.w_sum = 0, 0
         self.update_type = update_type
         if self.update_type not in UPDATE_TYPES:
@@ -79,10 +79,12 @@ class RBFLinearCost:
         self.expert_rep = self.get_rep(expert_data)
         self.phi_e = self.expert_rep.mean(dim=0)
 
+        self.w = torch.rand(self.phi_e.shape).to(device)
+
     def get_rep(self, x):
         with torch.no_grad():
             out = self.rff(x)
-            out = torch.cos(out)*torch.sqrt(2/self.feature_dim)
+            out = torch.cos(out)*np.sqrt(2/self.feature_dim)
         return out
 
     def update_expert_data(self,data):
@@ -93,7 +95,7 @@ class RBFLinearCost:
         idxs_0 = torch.randint(low=0, high=num_data, size=(self.bw_samples,))
         idxs_1 = torch.randint(low=0, high=num_data, size=(self.bw_samples,))
         norm = torch.norm(data[idxs_0, :]-data[idxs_1, :], dim=1)
-        bw = np.quantile(norm.numpy(), q=self.quantile)
+        bw = np.quantile(norm.cpu().numpy(), q=self.quantile)
         self.rff.weight.data = self.init_rand_weight/(bw+1e-8)
         #return bw
 
@@ -113,6 +115,15 @@ class RBFLinearCost:
         if self.cost_range is not None:
             return torch.clamp(torch.matmul(data, self.w).unsqueeze(-1), self.c_min, self.c_max)
         return torch.matmul(data, self.w).unsqueeze(-1)
+
+
+    def get_single_cost(self,x):
+        x = torch.as_tensor([x], device=self.device).float()
+        data = self.get_rep(x)
+        
+        if self.cost_range is not None:
+            return torch.clamp(torch.matmul(data, self.w).unsqueeze(-1), self.c_min, self.c_max)[0].cpu().item()
+        return torch.matmul(data, self.w).unsqueeze(-1)[0].cpu().numpy()
 
     def get_expert_cost(self):
         return torch.clamp(torch.mm(self.expert_rep, self.w.unsqueeze(1)), self.c_min, self.c_max).mean()

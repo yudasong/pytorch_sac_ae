@@ -122,6 +122,11 @@ class ReplayBuffer(object):
 
         #return obses,states, actions, rewards, next_obses, next_states, not_dones
         return states,states, actions, rewards, next_states, next_states, not_dones
+
+    def update_reward(self, cost_function):
+        states = torch.as_tensor(self.states[:self.idx], device=self.device).float()
+        costs = -1.0 * cost_function.get_costs(states).cpu().numpy()
+        self.rewards[:self.idx] = costs
         
     def save(self, save_dir):
         if self.idx == self.last_save:
@@ -148,12 +153,12 @@ class ReplayBuffer(object):
             payload = torch.load(path)
             assert self.idx == start
             #self.obses[start:end] = payload[0]
-            self.states[start:end] = payload[1]
+            self.states[start:end] = payload[0]
             #self.next_obses[start:end] = payload[2]
-            self.next_states[start:end] = payload[3]
-            self.actions[start:end] = payload[4]
-            self.rewards[start:end] = payload[5]
-            self.not_dones[start:end] = payload[6]
+            self.next_states[start:end] = payload[1]
+            self.actions[start:end] = payload[2]
+            self.rewards[start:end] = payload[3]
+            self.not_dones[start:end] = payload[4]
             self.idx = end
 
 
