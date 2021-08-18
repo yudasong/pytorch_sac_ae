@@ -49,7 +49,7 @@ def make_dir(dir_path):
     try:
         os.mkdir(dir_path)
     except OSError:
-        print("dir note created!")
+        print("dir not created!")
     return dir_path
 
 
