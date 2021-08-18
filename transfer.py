@@ -84,6 +84,8 @@ def parse_args():
     parser.add_argument('--save_buffer', default=True, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
+    parser.add_argument('--gravity', default=-9.8, type=float)
+
     args = parser.parse_args()
     return args
 
@@ -215,7 +217,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    env.physics.model.opt.gravity[2] = -5
+    env.physics.model.opt.gravity[2] = args.gravity
 
     # stack several consecutive frames together
     #if args.encoder_type == 'pixel':
