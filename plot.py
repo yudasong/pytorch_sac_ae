@@ -28,7 +28,7 @@ for item in ([ax.title, ax.xaxis.label, ax.yaxis.label] +
 for item in (ax.get_xticklabels() + ax.get_yticklabels()):
     item.set_fontsize(20)
 
-alg_list = ["sac_aq", "agtr_q", "agtr_aq", "agtr_aq_2Q", "agtr_aq_dag"]
+alg_list = ["sac_aq", "agtr_q", "agtr_aq", "agtr_aq_2Q"]
 
 for alg in alg_list:
 	rewards = []
@@ -52,4 +52,4 @@ ax.set_ylabel("rewards")
 plt.legend(fontsize=16, loc='center right')
 plt.title(args.env,fontsize=24)
 
-plt.savefig("{}.pdf".format(args.env),bbox_inches='tight')
+plt.savefig("{}.png".format(args.env),bbox_inches='tight')

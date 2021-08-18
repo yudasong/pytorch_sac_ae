@@ -41,7 +41,7 @@ class RBFLinearCost:
         np.random.seed(seed)
 
         self.expert_data = expert_data
-        input_dim = expert_data.size(1)
+        input_dim = expert_data.shape[1]
         self.input_type = input_type
         self.input_dim = input_dim
         self.feature_dim = feature_dim
@@ -105,11 +105,18 @@ class RBFLinearCost:
     def update(self, policy_data):
         #policy_data = torch.cat([policy_buffer.states[:-1], policy_buffer.actions], dim=-1).view(-1, self.input_dim)
         #TODO: Should we update bandwidth??
-
+        policy_data = torch.as_tensor(policy_data, device=self.device)
         phi = self.get_rep(policy_data).mean(0)
         feat_diff = phi - self.phi_e
 
         self.w = feat_diff
+
+        return torch.dot(self.w, feat_diff).item()
+
+    def get_mmd(self,data):
+        data = torch.as_tensor(data,device=self.device)
+        phi = self.get_rep(data).mean(0)
+        feat_diff = phi - self.phi_e
 
         return torch.dot(self.w, feat_diff).item()
 
@@ -119,6 +126,7 @@ class RBFLinearCost:
         if self.cost_range is not None:
             return torch.clamp(torch.matmul(data, self.w).unsqueeze(-1), self.c_min, self.c_max)
         return torch.matmul(data, self.w).unsqueeze(-1)
+
 
 
     def get_single_cost(self,x):

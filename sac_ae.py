@@ -224,6 +224,9 @@ class Critic(nn.Module):
         if step % log_freq != 0:
             return
 
+        if L is None:
+            return
+
         self.encoder.log(L, step, log_freq)
 
         for k, v in self.outputs.items():
@@ -425,7 +428,9 @@ class SacAeAgent(object):
         current_Q1, current_Q2 = self.critic(obs, action)
         critic_loss = F.mse_loss(current_Q1,
                                  target_Q) + F.mse_loss(current_Q2, target_Q)
-        L.log('train_critic/loss', critic_loss, step)
+
+        if L is not None:
+            L.log('train_critic/loss', critic_loss, step)
 
 
         # Optimize the critic
@@ -526,9 +531,9 @@ class SacAeAgent(object):
             obs, state, action, reward, next_obs, next_state, not_done = imitation_replay_buffer.sample()
 
         if self.encoder_type == 'identity':
-            self.update_critic(state, action, reward, next_state, not_done, L, step)
+            self.update_critic(state, action, reward, next_state, not_done, None, step)
         else:
-            self.update_critic(obs, action, reward, next_obs, not_done, L, step)
+            self.update_critic(obs, action, reward, next_obs, not_done, None, step)
 
         if step % self.critic_target_update_freq == 0:
             utils.soft_update_params(
@@ -566,6 +571,14 @@ class SacAeAgent(object):
                 '%s/decoder_%s.pt' % (model_dir, step)
             )
 
+    def save_post_critics(self,model_dir,step):
+        torch.save(
+            self.critic.state_dict(), '%s/post_critic_%s.pt' % (model_dir, step)
+        )
+        torch.save(
+            self.critic_target.state_dict(), '%s/post_critic_target_%s.pt' % (model_dir, step)
+        )
+
     def load(self, model_dir, step):
         self.actor.load_state_dict(
             torch.load('%s/actor_%s.pt' % (model_dir, step))
@@ -573,9 +586,10 @@ class SacAeAgent(object):
         self.critic.load_state_dict(
             torch.load('%s/critic_%s.pt' % (model_dir, step))
         )
-        self.critic.load_state_dict(
-            torch.load('%s/critic_%s.pt' % (model_dir, step))
-        )
+        self.critic_target.load_state_dict(self.critic.state_dict())
+        #self.critic_target.load_state_dict(
+        #    torch.load('%s/critic_%s.pt' % (model_dir, step))
+        #)
         self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step))))
         print(self.alpha)
         if self.decoder is not None:

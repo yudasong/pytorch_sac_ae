@@ -41,8 +41,11 @@ def parse_args():
     parser.add_argument('--agent', default='sac_ae', type=str)
     parser.add_argument('--init_random_steps', default=1000, type=int)
     parser.add_argument('--init_expert_steps', default=2000, type=int)
+
     parser.add_argument('--num_train_steps', default=150000, type=int)
+
     parser.add_argument('--num_post_q_updates', default=1000, type=int)
+    parser.add_argument('--initial_imitation_episode', default=10,type=int)
     parser.add_argument('--num_imitation_train_steps', default=20000, type=int)
     parser.add_argument('--num_imitation_rollout_steps', default=10000, type=int)
 
@@ -238,10 +241,15 @@ def make_imitation_agent(obs_shape, action_shape, args, device):
             num_filters=args.num_filters
         )
 
-def dac(agent, env, cost_function, imitation_replay_buffer, L, args):
+def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
+    if episode == args.initial_imitation_episode:
+        num_imitation_train_steps = args.num_imitation_train_steps * 20
+    else:
+        num_imitation_train_steps = args.num_imitation_train_steps
     episode, episode_reward, done = 0, 0, True
+    
     start_time = time.time()
-    for step in range(args.num_imitation_train_steps):
+    for step in range(num_imitation_train_steps):
         if done:
             #if step > 0:
                 # L.log('train/duration', time.time() - start_time, step)
@@ -250,7 +258,6 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, args):
 
             obs, state = env.reset()
             done = False
-            episode_reward = 0
             episode_step = 0
             episode += 1
 
@@ -268,6 +275,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, args):
                 L.log('imitation/episode_reward', episode_reward, step)
                 L.dump(step)
 
+            episode_reward = 0
 
         # sample action for data collection
         if imitation_replay_buffer.idx < args.init_random_steps:
@@ -288,7 +296,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, args):
             for _ in range(num_updates):
                 agent.update(imitation_replay_buffer, L, step)
                 #expert_agent.update(replay_buffer, L, step)
-        next_obs, next_state, _, done, _ = env.step(action)
+        next_obs, next_state, raw_reward, done, _ = env.step(action)
         reward = -1.0 * cost_function.get_single_cost(state)
         #print(reward)
         #print(reward)
@@ -297,7 +305,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, args):
         done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
             done
         )
-        episode_reward += reward
+        episode_reward += raw_reward
         imitation_replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool)
 
         obs = next_obs
@@ -310,16 +318,20 @@ def rollout(agent, replay_buffer, env, args):
         if done:
             obs, state = env.reset()
             done = False
+            print("rollout reward: {}".format(episode_reward))
             episode_reward = 0
             episode_step = 0
             episode += 1
 
         with utils.eval_mode(agent):
-
-            if agent.encoder_type == 'identity':
-                action = agent.sample_action(state)
+            if np.random.rand() > 0.05:
+            #if True:
+                if agent.encoder_type == 'identity':
+                    action = agent.sample_action(state)
+                else:
+                    action = agent.sample_action(obs)
             else:
-                action = agent.sample_action(obs)
+                action = env.action_space.sample()
         
         next_obs, next_state, reward, done, _ = env.step(action)
 
@@ -350,7 +362,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    env.physics.model.opt.gravity[2] = -18
+    env.physics.model.opt.gravity[2] = -5
 
     source_env = dmc2gym.make(
         domain_name=args.domain_name,
@@ -548,19 +560,24 @@ def main():
 
             
 
-            if not cost_function and episode > 5:
+            if not cost_function and episode >= args.initial_imitation_episode:
                 recent_states = replay_buffer.get_recent_states()
                 cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
 
-            elif episode > 5:
+            elif episode >= args.initial_imitation_episode:
                 recent_states = replay_buffer.get_recent_states()
-                cost_function.update_expert_data(recent_states)
                 cost_function.update_bandwidth(recent_states)
+                cost_function.update_expert_data(recent_states)
+                
 
             if cost_function:
-                dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, args)
+                dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
                 rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
                 
+                recent_states = imitation_rollout_buffer.get_recent_states()
+                mmd = cost_function.get_mmd(recent_states)
+                print("mmd: {}".format(mmd))
+
                 for s in range(args.num_post_q_updates):
                     expert_agent.post_update_critic(expert_replay_buffer, imitation_rollout_buffer,s)
                 
