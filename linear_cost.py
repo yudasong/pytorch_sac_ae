@@ -28,7 +28,7 @@ class RBFLinearCost:
                  feature_dim=1024,
                  input_type='sa',
                  update_type='exact',
-                 cost_range=[-1.,0.],
+                 cost_range=[-1.,1.],
                  bw_quantile=0.1,
                  bw_samples=100000,
                  lambda_b=1.0,
