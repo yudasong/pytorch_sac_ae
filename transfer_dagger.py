@@ -44,10 +44,11 @@ def parse_args():
 
     parser.add_argument('--num_train_steps', default=150000, type=int)
 
-    parser.add_argument('--num_post_q_updates', default=1000, type=int)
+    parser.add_argument('--num_post_q_updates', default=5000, type=int)
     parser.add_argument('--initial_imitation_episode', default=10,type=int)
-    parser.add_argument('--num_imitation_train_steps', default=20000, type=int)
-    parser.add_argument('--num_imitation_rollout_steps', default=10000, type=int)
+    parser.add_argument('--num_imitation_train_steps', default=40000, type=int)
+    parser.add_argument('--num_imitation_rollout_steps', default=20000, type=int)
+    parser.add_argument('--imitation_freq', default=2, type=int)
 
     parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
@@ -93,6 +94,8 @@ def parse_args():
     parser.add_argument('--save_model', default=True, action='store_true')
     parser.add_argument('--save_buffer', default=True, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
+
+    parser.add_argument('--gravity', default=-9.8, type=float)
 
     args = parser.parse_args()
     return args
@@ -243,7 +246,7 @@ def make_imitation_agent(obs_shape, action_shape, args, device):
 
 def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
     if episode == args.initial_imitation_episode:
-        num_imitation_train_steps = args.num_imitation_train_steps * 20
+        num_imitation_train_steps = args.num_imitation_train_steps * 10
     else:
         num_imitation_train_steps = args.num_imitation_train_steps
     episode, episode_reward, done = 0, 0, True
@@ -278,7 +281,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
             episode_reward = 0
 
         # sample action for data collection
-        if imitation_replay_buffer.idx < args.init_random_steps:
+        if imitation_replay_buffer.idx < args.init_random_steps and episode == args.initial_imitation_episode:
         #if False:
             action = env.action_space.sample()                
         
@@ -290,8 +293,8 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
                 else:
                     action = agent.sample_action(obs)
         
-        if imitation_replay_buffer.idx > args.init_random_steps:
-            num_updates = args.init_random_steps if imitation_replay_buffer.idx == args.init_random_steps else 1
+        if imitation_replay_buffer.idx > args.init_random_steps or episode > args.initial_imitation_episode:
+            num_updates = args.init_random_steps if (imitation_replay_buffer.idx == args.init_random_steps and episode == args.initial_imitation_episode) else 1
         
             for _ in range(num_updates):
                 agent.update(imitation_replay_buffer, L, step)
@@ -362,7 +365,7 @@ def main():
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    env.physics.model.opt.gravity[2] = -5
+    env.physics.model.opt.gravity[2] = args.gravity
 
     source_env = dmc2gym.make(
         domain_name=args.domain_name,
@@ -570,7 +573,7 @@ def main():
                 cost_function.update_expert_data(recent_states)
                 
 
-            if cost_function:
+            if cost_function and episode % args.imitation_freq == 0:
                 dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
                 rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
                 
