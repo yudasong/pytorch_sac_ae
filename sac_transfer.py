@@ -443,14 +443,14 @@ class SacTransferAgent(object):
 
     def load(self, model_dir, step):
         self.actor.load_state_dict(
-            torch.load('%s/actor_%s.pt' % (model_dir, step))
+            torch.load('%s/actor_%s.pt' % (model_dir, step), map_location=self.device)
         )
         self.critic.load_state_dict(
-            torch.load('%s/critic_%s.pt' % (model_dir, step))
+            torch.load('%s/critic_%s.pt' % (model_dir, step), map_location=self.device)
         )
         self.critic_target.load_state_dict(self.critic.state_dict())
         self.ag_critic.load_state_dict(
-            torch.load('%s/critic_%s.pt' % (model_dir, step))
+            torch.load('%s/critic_%s.pt' % (model_dir, step), map_location=self.device)
         )
         #self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
-        self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step))))
+        self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step), map_location=self.device)))

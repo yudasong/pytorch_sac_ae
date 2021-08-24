@@ -273,7 +273,6 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
                 imitation_replay_buffer.update_reward(cost_function)
                 
 
-                #print("imitation")
                 L.log('imitation/episode', episode, step)
                 L.log('imitation/episode_reward', episode_reward, step)
                 L.dump(step)
@@ -400,12 +399,12 @@ def main():
     if len(device_ids) == 1:
         device_name = '{}:{}'.format(device_name, device_ids[0])
         device = torch.device(device_name)
-    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
     # the dmc2gym wrapper standardizes actions
     assert env.action_space.low.min() >= -1
     assert env.action_space.high.max() <= 1
-
+    
     replay_buffer = utils.ReplayBuffer(
         obs_shape=env.observation_space.shape,
         state_shape=env.state_space.shape,
@@ -443,7 +442,6 @@ def main():
     )
 
 
-    
     if args.expert_encoder_type == 'pixel':
 
         expert_agent = make_agent(
@@ -474,6 +472,7 @@ def main():
             args=args,
             device=device
         )
+
 
     if args.encoder_type == 'pixel':
         bc_agent = make_bcagent(
@@ -508,7 +507,6 @@ def main():
             args=args,
             device=device
         )
-
 
 
 
@@ -584,7 +582,7 @@ def main():
                 for s in range(args.num_post_q_updates):
                     expert_agent.post_update_critic(expert_replay_buffer, imitation_rollout_buffer,s)
                 
-                expert_agent.save_post_critics(args.work_dir, step)
+                #expert_agent.save_post_critics(args.work_dir, step)
 
 
             L.log('train/episode', episode, step)
