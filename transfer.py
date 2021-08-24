@@ -431,7 +431,7 @@ def main():
         #    num_updates = args.init_random_steps if step == args.init_random_steps else 1
         
             for _ in range(num_updates):
-                agent.update(replay_buffer, bc_agent, expert_agent, L, step)
+                agent.update(replay_buffer, bc_agent, expert_agent, L, step, total_steps = args.num_train_steps)
                 #expert_agent.update(replay_buffer, L, step)
         next_obs, next_state, reward, done, _ = env.step(action)
 

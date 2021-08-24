@@ -368,17 +368,18 @@ class SacTransferAgent(object):
 
         self.ag_critic.log(L, step)
 
-    def update_actor_and_alpha(self, obs, L, step):
+    def update_actor_and_alpha(self, obs, L, step, ratio = -1):
         # detach encoder, so we don't update it with the actor loss
         _, pi, log_pi, log_std = self.actor(obs, detach_encoder=True)
         actor_Q1, actor_Q2 = self.critic(obs, pi, detach_encoder=True)
         ag_Q1, ag_Q2 = self.ag_critic(obs, pi, detach_encoder=True)
         actor_Q = torch.min(actor_Q1, actor_Q2)
         ag_Q = torch.min(ag_Q1,ag_Q2)
-        #Q = 0.5 * actor_Q + 0.5 * ag_Q
-        #actor_loss = (self.alpha.detach() * log_pi - Q).mean()
-
-        actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
+        if ratio >= 0:
+            Q = ratio * actor_Q + (1-ratio) * ag_Q
+            actor_loss = (self.alpha.detach() * log_pi - Q).mean()
+        else:
+            actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
 
         L.log('train_actor/loss', actor_loss, step)
         L.log('train_actor/target_entropy', self.target_entropy, step)
@@ -401,7 +402,7 @@ class SacTransferAgent(object):
         #alpha_loss.backward()
         #self.log_alpha_optimizer.step()
 
-    def update(self, replay_buffer, bc_agent, expert, L, step):
+    def update(self, replay_buffer, bc_agent, expert, L, step, total_steps=0):
         obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
 
         L.log('train/batch_reward', reward.mean(), step)
@@ -414,10 +415,16 @@ class SacTransferAgent(object):
             self.update_ag_critic(bc_agent, expert, obs, action, reward, next_obs, not_done, L, step)
 
         if step % self.actor_update_freq == 0:
-            if self.encoder_type == 'identity':
-                self.update_actor_and_alpha(state, L, step)
+
+            if total_steps != 0:
+                q_ratio = step / total_steps
             else:
-                self.update_actor_and_alpha(obs, L, step)
+                q_ratio = -1
+
+            if self.encoder_type == 'identity':
+                self.update_actor_and_alpha(state, L, step, ratio = q_ratio)
+            else:
+                self.update_actor_and_alpha(obs, L, step, ratio = q_ratio)
 
         if step % self.critic_target_update_freq == 0:
             utils.soft_update_params(
