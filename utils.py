@@ -104,9 +104,15 @@ class ReplayBuffer(object):
             return self.next_states[self.idx-k:self.idx]
         else:
             if discard_random:
-                return self.next_states[:self.idx]
+                if self.full:
+                    return self.next_states
+                else:
+                    return self.next_states[:self.idx]
             else:
-                return self.next_states[:self.idx]
+                if self.full:
+                    return self.next_states
+                else:
+                    return self.next_states[:self.idx]
     def sample(self):
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx, size=self.batch_size
@@ -124,6 +130,12 @@ class ReplayBuffer(object):
 
         #return obses,states, actions, rewards, next_obses, next_states, not_dones
         return states,states, actions, rewards, next_states, next_states, not_dones
+
+    def get_episode(self):
+        states = torch.as_tensor(self.states, device=self.device).float()
+        actions = torch.as_tensor(self.actions, device=self.device)
+
+        return states, actions, self.rewards
 
     def update_reward(self, cost_function):
         states = torch.as_tensor(self.states[:self.idx], device=self.device).float()
