@@ -549,21 +549,21 @@ class SacAeImitationAgent(object):
 
     def save(self, model_dir, step):
         torch.save(
-            self.actor.state_dict(), '%s/actor_%s.pt' % (model_dir, step)
+            self.actor.state_dict(), '%s/imitation_actor_%s.pt' % (model_dir, step)
         )
         torch.save(
-            self.critic.state_dict(), '%s/critic_%s.pt' % (model_dir, step)
+            self.critic.state_dict(), '%s/imitation_critic_%s.pt' % (model_dir, step)
         )
         torch.save(
-            self.critic_target.state_dict(), '%s/critic_target_%s.pt' % (model_dir, step)
+            self.critic_target.state_dict(), '%s/imitation_critic_target_%s.pt' % (model_dir, step)
         )
         torch.save(
-            self.alpha, '%s/alpha_%s.pt' % (model_dir, step)
+            self.alpha, '%s/imitation_alpha_%s.pt' % (model_dir, step)
         )
         if self.decoder is not None:
             torch.save(
                 self.decoder.state_dict(),
-                '%s/decoder_%s.pt' % (model_dir, step)
+                '%s/imitation_decoder_%s.pt' % (model_dir, step)
             )
 
     def save_post_critic(self,model_dir,step):

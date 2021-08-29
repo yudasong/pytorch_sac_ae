@@ -416,6 +416,14 @@ class SacAeAgent(object):
             mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
             return pi.cpu().data.numpy().flatten()
 
+    def sample_action_with_logpi(self,obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            obs = obs.unsqueeze(0)
+            mu, pi, log_pi, _ = self.actor(obs)
+            return pi.cpu().data.numpy().flatten(), log_pi.cpu().data.numpy()
+
+
     def update_critic(self, obs, action, reward, next_obs, not_done, L, step):
         with torch.no_grad():
             _, policy_action, log_pi, _ = self.actor(next_obs)
