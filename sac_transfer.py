@@ -375,11 +375,20 @@ class SacTransferAgent(object):
         ag_Q1, ag_Q2 = self.ag_critic(obs, pi, detach_encoder=True)
         actor_Q = torch.min(actor_Q1, actor_Q2)
         ag_Q = torch.min(ag_Q1,ag_Q2)
+
+        '''
         if ratio >= 0:
             Q = ratio * actor_Q + (1-ratio) * ag_Q
             actor_loss = (self.alpha.detach() * log_pi - Q).mean()
         else:
             actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
+        '''
+        if np.random.rand() > 0.5:
+            actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
+        else:
+            actor_loss = (self.alpha.detach() * log_pi - actor_Q).mean()
+        #Q = 0.2 * actor_Q + 0.8 * ag_Q
+        #actor_loss = (self.alpha.detach() * log_pi - Q).mean()
 
         L.log('train_actor/loss', actor_loss, step)
         L.log('train_actor/target_entropy', self.target_entropy, step)
