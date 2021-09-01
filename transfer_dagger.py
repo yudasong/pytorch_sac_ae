@@ -91,8 +91,8 @@ def parse_args():
     parser.add_argument('--expert_dir', default='.', type=str)
     parser.add_argument('--work_dir', default='.', type=str)
     parser.add_argument('--save_tb', default=False, action='store_true')
-    parser.add_argument('--save_model', default=True, action='store_true')
-    parser.add_argument('--save_buffer', default=True, action='store_true')
+    parser.add_argument('--save_model', default=False, action='store_true')
+    parser.add_argument('--save_buffer', default=False, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
     parser.add_argument('--gravity', default=-9.8, type=float)
@@ -399,7 +399,7 @@ def main():
     if len(device_ids) == 1:
         device_name = '{}:{}'.format(device_name, device_ids[0])
         device = torch.device(device_name)
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     print(device)
     # the dmc2gym wrapper standardizes actions
     assert env.action_space.low.min() >= -1
@@ -516,6 +516,7 @@ def main():
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
     agent.load(os.path.join(args.expert_dir, 'model'),990000)
+    agent.set_zero_alpha()
 
 
     print("expert loaded.")
@@ -573,16 +574,16 @@ def main():
 
             if cost_function and episode % args.imitation_freq == 0:
                 dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
-                rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
+                #rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
                 
                 recent_states = imitation_rollout_buffer.get_recent_states()
                 mmd = cost_function.get_mmd(recent_states)
                 print("mmd: {}".format(mmd))
 
                 for s in range(args.num_post_q_updates):
-                    expert_agent.post_update_critic(expert_replay_buffer, imitation_rollout_buffer,s)
+                    expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
                 
-                #expert_agent.save_post_critics(args.work_dir, step)
+                expert_agent.save_post_critics(args.work_dir, step)
 
 
             L.log('train/episode', episode, step)
@@ -631,7 +632,7 @@ def main():
         #    num_updates = args.init_random_steps if step == args.init_random_steps else 1
         
             for _ in range(num_updates):
-                agent.update(replay_buffer, bc_agent, expert_agent, L, step)
+                agent.update(replay_buffer, bc_agent, expert_agent, L, step, total_steps = args.num_train_steps)
                 #expert_agent.update(replay_buffer, L, step)
         next_obs, next_state, reward, done, _ = env.step(action)
 
@@ -654,6 +655,7 @@ def main():
     if args.save_model:
         #expert_agent.save(model_dir, step)
         agent.save(model_dir, step)
+        imitation_agent.save(model_dir, step)
     if args.save_buffer:
         replay_buffer.save(buffer_dir)
 

@@ -32,7 +32,7 @@ def parse_args():
     # replay buffer
     parser.add_argument('--replay_buffer_capacity', default=150000, type=int)
     parser.add_argument('--imitation_replay_buffer_capacity', default=1000000, type=int)
-    parser.add_argument('--imitation_rollout_buffer_capacity', default=100000, type=int)
+    parser.add_argument('--imitation_rollout_buffer_capacity', default=150000, type=int)
 
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
@@ -80,8 +80,8 @@ def parse_args():
     parser.add_argument('--expert_dir', default='.', type=str)
     parser.add_argument('--work_dir', default='.', type=str)
     parser.add_argument('--save_tb', default=False, action='store_true')
-    parser.add_argument('--save_model', default=True, action='store_true')
-    parser.add_argument('--save_buffer', default=True, action='store_true')
+    parser.add_argument('--save_model', default=False, action='store_true')
+    parser.add_argument('--save_buffer', default=False, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
     parser.add_argument('--gravity', default=-9.8, type=float)
@@ -348,6 +348,7 @@ def main():
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
     agent.load(os.path.join(args.expert_dir, 'model'),990000)
+    agent.set_zero_alpha()
 
     print("expert loaded.")
 
