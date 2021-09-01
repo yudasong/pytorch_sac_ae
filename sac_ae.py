@@ -342,6 +342,9 @@ class SacAeAgent(object):
 
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(device)
         self.log_alpha.requires_grad = True
+
+        self.zero_alpha = False
+
         # set target entropy to -|A|
         self.target_entropy = -np.prod(action_shape)
 
@@ -391,7 +394,13 @@ class SacAeAgent(object):
 
     @property
     def alpha(self):
-        return self.log_alpha.exp()
+        if self.zero_alpha:
+            return self.log_alpha.exp() * 0
+        else:
+            return self.log_alpha.exp()
+
+    def set_zero_alpha(self):
+        self.zero_alpha = True
 
     def select_action(self, obs):
         with torch.no_grad():
