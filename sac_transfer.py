@@ -392,15 +392,15 @@ class SacTransferAgent(object):
             actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
         '''
         
-        #if np.random.rand() > 0.5:
-        #    actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
-        #else:
-        #    actor_loss = (self.alpha.detach() * log_pi - actor_Q).mean()
+        if np.random.rand() > 0.5:
+            actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
+        else:
+            actor_loss = (self.alpha.detach() * log_pi - actor_Q).mean()
         
         #Q = 0.2 * actor_Q + 0.8 * ag_Q
         #actor_loss = (self.alpha.detach() * log_pi - Q).mean()
 
-        actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
+        #actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
 
         L.log('train_actor/loss', actor_loss, step)
         L.log('train_actor/target_entropy', self.target_entropy, step)

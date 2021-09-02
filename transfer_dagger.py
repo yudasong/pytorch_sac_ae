@@ -512,6 +512,7 @@ def main():
 
     expert_agent.load(os.path.join(args.expert_dir, 'model'),990000)
     expert_replay_buffer.load(os.path.join(args.expert_dir, 'buffer'))
+    expert.set_zero_alpha()
 
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
