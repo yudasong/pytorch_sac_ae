@@ -95,6 +95,7 @@ def parse_args():
     parser.add_argument('--save_buffer', default=False, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
+    parser.add_argument('--no_entropy', default=False, action='store_true')
     parser.add_argument('--gravity', default=-9.8, type=float)
 
     args = parser.parse_args()
@@ -241,7 +242,8 @@ def make_imitation_agent(obs_shape, action_shape, args, device):
             decoder_latent_lambda=args.decoder_latent_lambda,
             decoder_weight_lambda=args.decoder_weight_lambda,
             num_layers=args.num_layers,
-            num_filters=args.num_filters
+            num_filters=args.num_filters,
+            no_entropy=args.no_entropy
         )
 
 def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
@@ -510,15 +512,12 @@ def main():
 
 
 
-    expert_agent.load(os.path.join(args.expert_dir, 'model'),990000)
+    expert_agent.load(os.path.join(args.expert_dir, 'model'),990000, no_entropy=args.no_entropy)
     expert_replay_buffer.load(os.path.join(args.expert_dir, 'buffer'))
-    expert.set_zero_alpha()
-
+    
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
-    agent.load(os.path.join(args.expert_dir, 'model'),990000)
-    agent.set_zero_alpha()
-
+    agent.load(os.path.join(args.expert_dir, 'model'),990000, no_entropy=args.no_entropy)
 
     print("expert loaded.")
 
@@ -584,7 +583,7 @@ def main():
                 for s in range(args.num_post_q_updates):
                     expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
                 
-                expert_agent.save_post_critics(args.work_dir, step)
+                #expert_agent.save_post_critics(args.work_dir, step)
 
 
             L.log('train/episode', episode, step)

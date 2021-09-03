@@ -211,7 +211,8 @@ class SacTransferAgent(object):
         encoder_lr=1e-3,
         encoder_tau=0.005,
         num_layers=4,
-        num_filters=32
+        num_filters=32,
+        no_entropy=False
     ):
         self.device = device
         self.discount = discount
@@ -260,12 +261,13 @@ class SacTransferAgent(object):
         # tie encoders between actor and critic
         self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
 
-        self.zero_alpha = False
+        self.zero_alpha = no_entropy
 
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(device)
         self.log_alpha.requires_grad = True
         # set target entropy to -|A|
         self.target_entropy = -np.prod(action_shape)
+
 
         # optimizers
         self.actor_optimizer = torch.optim.Adam(
@@ -469,19 +471,32 @@ class SacTransferAgent(object):
             self.ag_critic.state_dict(), '%s/ag_critic_%s.pt' % (model_dir, step)
         )
 
-    def load(self, model_dir, step, post_step=199999):
+    def load(self, model_dir, step, no_entropy=False, post_step=199999):
         self.actor.load_state_dict(
             torch.load('%s/actor_%s.pt' % (model_dir, step), map_location=self.device)
         )
-        self.critic.load_state_dict(
-            torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
-        )
-        self.critic_target.load_state_dict(
-            torch.load('%s/post_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
-        )
-        #self.critic_target.load_state_dict(self.critic.state_dict())
-        self.ag_critic.load_state_dict(
-            torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
-        )
+
+        if no_entropy:
+            self.critic.load_state_dict(
+                torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+            )
+            #self.critic_target.load_state_dict(
+            #    torch.load('%s/post_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
+            #)
+            self.critic_target.load_state_dict(self.critic.state_dict())
+            self.ag_critic.load_state_dict(
+                torch.load('%s/critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+            )
+        else:
+            self.critic.load_state_dict(
+                torch.load('%s/critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+            )
+            #self.critic_target.load_state_dict(
+            #    torch.load('%s/post_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
+            #)
+            self.critic_target.load_state_dict(self.critic.state_dict())
+            self.ag_critic.load_state_dict(
+                torch.load('%s/critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+            )
         #self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
         self.log_alpha.data.copy_(torch.log(torch.load('%s/alpha_%s.pt' % (model_dir, step), map_location=self.device)))
