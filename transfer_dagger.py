@@ -210,7 +210,8 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
             num_layers=args.num_layers,
-            num_filters=args.num_filters
+            num_filters=args.num_filters,
+            no_entropy=args.no_entropy
     )
 
 def make_imitation_agent(obs_shape, action_shape, args, device):
@@ -242,8 +243,7 @@ def make_imitation_agent(obs_shape, action_shape, args, device):
             decoder_latent_lambda=args.decoder_latent_lambda,
             decoder_weight_lambda=args.decoder_weight_lambda,
             num_layers=args.num_layers,
-            num_filters=args.num_filters,
-            no_entropy=args.no_entropy
+            num_filters=args.num_filters
         )
 
 def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
