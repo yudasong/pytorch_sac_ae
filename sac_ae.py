@@ -596,21 +596,24 @@ class SacAeAgent(object):
             self.critic_target.state_dict(), '%s/post_critic_target_%s.pt' % (model_dir, step)
         )
 
-    def load(self, model_dir, step, post_step=199999):
+    def load(self, model_dir, step, no_entropy=False, post_step=199999):
         self.actor.load_state_dict(
             torch.load('%s/actor_%s.pt' % (model_dir, step), map_location=self.device)
         )
-        # self.critic.load_state_dict(
-        #     torch.load('%s/critic_%s.pt' % (model_dir, step), map_location=self.device)
-        # )
-        # self.critic_target.load_state_dict(self.critic.state_dict())
         
-        self.critic.load_state_dict(
-            torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
-        )
-        self.critic_target.load_state_dict(
-            torch.load('%s/post_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
-        )
+        
+        if no_entropy:
+            self.critic.load_state_dict(
+                torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+            )
+            self.critic_target.load_state_dict(
+                torch.load('%s/post_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
+            )
+        else:
+            self.critic.load_state_dict(
+                torch.load('%s/critic_%s.pt' % (model_dir, step), map_location=self.device)
+            )
+            self.critic_target.load_state_dict(self.critic.state_dict())
 
 
         # #self.critic_target.load_state_dict(
