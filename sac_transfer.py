@@ -212,7 +212,8 @@ class SacTransferAgent(object):
         encoder_tau=0.005,
         num_layers=4,
         num_filters=32,
-        no_entropy=False
+        no_entropy=False,
+        lts_ratio=0.5
     ):
         self.device = device
         self.discount = discount
@@ -262,6 +263,7 @@ class SacTransferAgent(object):
         self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
 
         self.zero_alpha = no_entropy
+        self.lts_ratio = lts_ratio
 
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(device)
         self.log_alpha.requires_grad = True
@@ -394,10 +396,10 @@ class SacTransferAgent(object):
             actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
         '''
         
-        if np.random.rand() > 0.5:
-            actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
-        else:
+        if np.random.rand() > self.lts_ratio:
             actor_loss = (self.alpha.detach() * log_pi - actor_Q).mean()
+        else:
+            actor_loss = (self.alpha.detach() * log_pi - aq_Q).mean()
         
         #Q = 0.2 * actor_Q + 0.8 * ag_Q
         #actor_loss = (self.alpha.detach() * log_pi - Q).mean()
@@ -485,7 +487,7 @@ class SacTransferAgent(object):
             #)
             self.critic_target.load_state_dict(self.critic.state_dict())
             self.ag_critic.load_state_dict(
-                torch.load('%s/critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+                torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
             )
         else:
             self.critic.load_state_dict(

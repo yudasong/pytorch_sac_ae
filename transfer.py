@@ -84,7 +84,9 @@ def parse_args():
     parser.add_argument('--save_buffer', default=False, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
+    parser.add_argument('--no_entropy', default=False, action='store_true')
     parser.add_argument('--gravity', default=-9.8, type=float)
+    parser.add_argument('--lts_ratio', default=0.5, type=float)
 
     args = parser.parse_args()
     return args
@@ -142,7 +144,8 @@ def make_agent(obs_shape, action_shape, args, device):
             decoder_latent_lambda=args.decoder_latent_lambda,
             decoder_weight_lambda=args.decoder_weight_lambda,
             num_layers=args.num_layers,
-            num_filters=args.num_filters
+            num_filters=args.num_filters,
+            no_entropy=args.no_entropy
         )
     else:
         assert 'agent is not supported: %s' % args.agent
@@ -198,7 +201,9 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
             encoder_lr=args.encoder_lr,
             encoder_tau=args.encoder_tau,
             num_layers=args.num_layers,
-            num_filters=args.num_filters
+            num_filters=args.num_filters,
+            no_entropy=args.no_entropy,
+            lts_ratio=args.lts_ratio
     )
 
 

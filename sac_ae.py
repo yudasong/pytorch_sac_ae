@@ -307,7 +307,8 @@ class SacAeAgent(object):
         decoder_latent_lambda=0.0,
         decoder_weight_lambda=0.0,
         num_layers=4,
-        num_filters=32
+        num_filters=32,
+        no_entropy=False
     ):
         self.device = device
         self.discount = discount
@@ -343,7 +344,7 @@ class SacAeAgent(object):
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(device)
         self.log_alpha.requires_grad = True
 
-        self.zero_alpha = False
+        self.zero_alpha = no_entropy
 
         # set target entropy to -|A|
         self.target_entropy = -np.prod(action_shape)
