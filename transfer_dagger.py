@@ -563,11 +563,11 @@ def main():
             
 
             if not cost_function and episode >= args.initial_imitation_episode:
-                recent_states = replay_buffer.get_recent_states()
+                recent_states = replay_buffer.get_recent_next_states()
                 cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
 
             elif episode >= args.initial_imitation_episode:
-                recent_states = replay_buffer.get_recent_states()
+                recent_states = replay_buffer.get_recent_next_states()
                 cost_function.update_bandwidth(recent_states)
                 cost_function.update_expert_data(recent_states)
                 
@@ -576,9 +576,9 @@ def main():
                 dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
                 #rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
                 
-                recent_states = imitation_rollout_buffer.get_recent_states()
-                mmd = cost_function.get_mmd(recent_states)
-                print("mmd: {}".format(mmd))
+                #recent_states = imitation_rollout_buffer.get_recent_states()
+                #mmd = cost_function.get_mmd(recent_states)
+                #print("mmd: {}".format(mmd))
 
                 for s in range(args.num_post_q_updates):
                     expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)

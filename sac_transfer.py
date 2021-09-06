@@ -133,7 +133,48 @@ class QFunction(nn.Module):
         obs_action = torch.cat([obs, action], dim=1)
         return self.trunk(obs_action)
 
+class Ag_Critic(nn.Module):
+    """Critic network, employes two q-functions."""
+    def __init__(
+        self, obs_shape, action_shape, hidden_dim, encoder_type,
+        encoder_feature_dim, num_layers, num_filters
+    ):
+        super().__init__()
 
+
+        self.encoder = make_encoder(
+            encoder_type, obs_shape, encoder_feature_dim, num_layers,
+            num_filters
+        )
+
+        self.Q1 = QFunction(
+            self.encoder.feature_dim, action_shape[0], hidden_dim
+        )
+        self.Q2 = QFunction(
+            self.encoder.feature_dim, action_shape[0], hidden_dim
+        )
+
+        self.outputs = dict()
+        self.apply(weight_init)
+
+    def forward(self, obs, action, detach_encoder=False):
+        # detach_encoder allows to stop gradient propogation to encoder
+        obs = self.encoder(obs, detach=detach_encoder)
+
+        q1 = self.Q1(obs, action)
+
+        self.outputs['q1'] = q1
+
+        return q1
+
+    def log(self, L, step, log_freq=LOG_FREQ):
+        if step % log_freq != 0:
+            return
+
+        self.encoder.log(L, step, log_freq)
+
+        for k, v in self.outputs.items():
+            L.log_histogram('train_critic/%s_hist' % k, v, step)
 
 class Critic(nn.Module):
     """Critic network, employes two q-functions."""
@@ -213,7 +254,8 @@ class SacTransferAgent(object):
         num_layers=4,
         num_filters=32,
         no_entropy=False,
-        lts_ratio=0.5
+        lts_ratio=0.5,
+        q1 = False,
     ):
         self.device = device
         self.discount = discount
@@ -254,7 +296,7 @@ class SacTransferAgent(object):
 
         self.critic_target.load_state_dict(self.critic.state_dict())
 
-        self.ag_critic = Critic(
+        self.ag_critic = Ag_Critic(
             obs_shape, action_shape, hidden_dim, encoder_type,
             encoder_feature_dim, num_layers, num_filters
         ).to(device)
@@ -264,6 +306,7 @@ class SacTransferAgent(object):
 
         self.zero_alpha = no_entropy
         self.lts_ratio = lts_ratio
+        self.q1 = q1
 
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(device)
         self.log_alpha.requires_grad = True
@@ -356,22 +399,22 @@ class SacTransferAgent(object):
 
 
 
-            target_V = torch.zeros(len(obs),1).to(self.device)
+            target_V1 = torch.zeros(len(obs),1).to(self.device)
+            target_V2 = torch.zeros(len(obs),1).to(self.device)
             for i in range(10):
                 _, policy_action, log_pi, _ = expert.actor(next_obs)
-                target_Q1, target_Q2 = expert.critic_target(next_obs, policy_action)
-                target_V = target_V + torch.min(target_Q1,
-                                 target_Q2) - expert.alpha.detach() * log_pi
-            target_V = target_V / 10
+                target_Q1, target_Q2 = expert.critic(next_obs, policy_action)
+                target_V1 = target_V1 + target_Q1 - expert.alpha.detach() * log_pi
+                target_V2 = target_V2 + target_Q2 - expert.alpha.detach() * log_pi
+            target_V = torch.min(target_V1, target_V2) / 10
 
             #target_V = bc_agent.value_net(next_obs)
             target_Q = reward + (not_done * self.discount * target_V)
 
         # get current Q estimates
         #current_Q1, current_Q2 = self.critic(obs, action)
-        current_Q1, current_Q2 = self.ag_critic(obs, action, detach_encoder=False)
-        critic_loss = F.mse_loss(current_Q1,
-                                 target_Q) + F.mse_loss(current_Q2, target_Q)
+        current_Q1 = self.ag_critic(obs, action, detach_encoder=False)
+        critic_loss = F.mse_loss(current_Q1,target_Q) 
         #L.log('train_critic/loss', critic_loss, step)
         # Optimize the critic
         self.ag_critic_optimizer.zero_grad()
@@ -384,9 +427,13 @@ class SacTransferAgent(object):
         # detach encoder, so we don't update it with the actor loss
         _, pi, log_pi, log_std = self.actor(obs, detach_encoder=True)
         actor_Q1, actor_Q2 = self.critic(obs, pi, detach_encoder=True)
-        ag_Q1, ag_Q2 = self.ag_critic(obs, pi, detach_encoder=True)
-        actor_Q = torch.min(actor_Q1, actor_Q2)
-        ag_Q = torch.min(ag_Q1,ag_Q2)
+        ag_Q = self.ag_critic(obs, pi, detach_encoder=True)
+
+        if self.q1:
+            actor_Q = actor_Q1
+        else:
+            actor_Q = torch.min(actor_Q1, actor_Q2)
+        #ag_Q = torch.min(ag_Q1,ag_Q2)
 
         '''
         if ratio >= 0:
@@ -399,7 +446,7 @@ class SacTransferAgent(object):
         if np.random.rand() > self.lts_ratio:
             actor_loss = (self.alpha.detach() * log_pi - actor_Q).mean()
         else:
-            actor_loss = (self.alpha.detach() * log_pi - aq_Q).mean()
+            actor_loss = (self.alpha.detach() * log_pi - ag_Q).mean()
         
         #Q = 0.2 * actor_Q + 0.8 * ag_Q
         #actor_loss = (self.alpha.detach() * log_pi - Q).mean()

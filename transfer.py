@@ -87,6 +87,7 @@ def parse_args():
     parser.add_argument('--no_entropy', default=False, action='store_true')
     parser.add_argument('--gravity', default=-9.8, type=float)
     parser.add_argument('--lts_ratio', default=0.5, type=float)
+    parser.add_argument('--q1', default=False, action='store_true')
 
     args = parser.parse_args()
     return args
@@ -203,7 +204,8 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
             num_layers=args.num_layers,
             num_filters=args.num_filters,
             no_entropy=args.no_entropy,
-            lts_ratio=args.lts_ratio
+            lts_ratio=args.lts_ratio,
+            q1=args.q1
     )
 
 

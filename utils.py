@@ -99,20 +99,30 @@ class ReplayBuffer(object):
         self.idx = (self.idx + 1) % self.capacity
         self.full = self.full or self.idx == 0
 
-    def get_recent_states(self, k=1000000, discard_random=True):
-        if self.idx > k:
-            return self.next_states[self.idx-k:self.idx]
-        else:
-            if discard_random:
-                if self.full:
-                    return self.next_states
-                else:
-                    return self.next_states[:self.idx]
+    def get_recent_next_states(self, discard_random=True):
+        if discard_random:
+            if self.full:
+                return self.next_states[1000:]
             else:
-                if self.full:
-                    return self.next_states
-                else:
-                    return self.next_states[:self.idx]
+                return self.next_states[1000:self.idx]
+        else:
+            if self.full:
+                return self.next_states
+            else:
+                return self.next_states[:self.idx]
+
+    def get_recent_states(self, discard_random=False):
+        if discard_random:
+            if self.full:
+                return self.states[1000:]
+            else:
+                return self.states[1000:self.idx]
+        else:
+            if self.full:
+                return self.states
+            else:
+                return self.states[:self.idx]
+
     def sample(self):
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx, size=self.batch_size
