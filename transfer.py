@@ -359,7 +359,7 @@ def main(args):
     #if args.expert_encoder_type == 'pixel':
     #    agent.warm_start_from(expert_agent)
     agent.load(os.path.join(args.expert_dir, 'model'),990000)
-    agent.set_zero_alpha()
+    #agent.set_zero_alpha()
 
     print("expert loaded.")
 
