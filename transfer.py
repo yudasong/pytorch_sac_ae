@@ -468,6 +468,9 @@ def main(args):
     L.log('eval/episode', episode, step)
     #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
     evaluate(env, agent, video, args.num_eval_episodes, L, step)
+    train_data, eval_data = L.get_data(step)
+    wandb.log(eval_data)
+    L.dump(step)
     if args.save_model:
         #expert_agent.save(model_dir, step)
         agent.save(model_dir, step)
