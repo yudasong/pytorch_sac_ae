@@ -67,6 +67,11 @@ class MetersGroup(object):
             #print(data)
         return data
 
+    def get_data(self, step):
+        data = self._prime_meters()
+        data['step'] = step
+        return data
+
     def _dump_to_file(self, data):
         with open(self._file_name, 'a') as f:
             f.write(json.dumps(data) + '\n')
@@ -166,6 +171,13 @@ class Logger(object):
         #mg = self._train_mg if key.startswith('train') else self._eval_mg
 
         mg.log(key, value, n)
+
+    def get_data(self,step):
+
+        train_data = self._train_mg.get_data(step)
+        eval_data = self._eval_mg.get_data(step)
+
+        return train_data, eval_data
         #print(key)
     def log_param(self, key, param, step):
         self.log_histogram(key + '_w', param.weight.data, step)

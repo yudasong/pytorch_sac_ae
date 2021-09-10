@@ -89,6 +89,8 @@ def parse_args():
     parser.add_argument('--lts_ratio', default=0.5, type=float)
     parser.add_argument('--q1', default=False, action='store_true')
 
+    parser.add_argument('--exp_name', default='.', type=str)
+
     args = parser.parse_args()
     return args
 
@@ -111,7 +113,7 @@ def evaluate(env, agent, video, num_episodes, L, step):
 
         video.save('%d.mp4' % step)
         L.log('eval/episode_reward', episode_reward, step)
-    L.dump(step)
+    
 
 
 
@@ -209,8 +211,10 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
     )
 
 
-def main():
-    args = parse_args()
+def main(args):
+    
+
+
     utils.set_seed_everywhere(args.seed)
 
     env = dmc2gym.make(
@@ -382,6 +386,11 @@ def main():
                 L.log('eval/episode', episode, step)
                 #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
                 evaluate(env, agent, video, args.num_eval_episodes, L, step)
+
+                train_data, eval_data = L.get_data(step)
+                wandb.log(eval_data)
+                L.dump(step)
+
                 if args.save_model:
                     #expert_agent.save(model_dir, step)
                     agent.save(model_dir, step)
@@ -466,4 +475,13 @@ def main():
         replay_buffer.save(buffer_dir)
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+
+    import wandb
+
+    with wandb.init(
+            project="{}_{}".format(args.domain_name, str(args.gravity)[1:]),
+            job_type="ratio_search",
+            config=vars(args),
+            name=args.exp_name):
+        main(args)
