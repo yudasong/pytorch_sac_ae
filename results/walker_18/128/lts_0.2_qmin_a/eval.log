@@ -1,0 +1,16 @@
+{"episode": 0.0, "episode_reward": 522.9953210403792, "step": 0}
+{"episode": 10.0, "episode_reward": 353.237065083441, "step": 10000}
+{"episode": 20.0, "episode_reward": 280.08805909050534, "step": 20000}
+{"episode": 30.0, "episode_reward": 314.5331394471201, "step": 30000}
+{"episode": 40.0, "episode_reward": 720.534806551301, "step": 40000}
+{"episode": 50.0, "episode_reward": 838.6500877307657, "step": 50000}
+{"episode": 60.0, "episode_reward": 929.76494497682, "step": 60000}
+{"episode": 70.0, "episode_reward": 947.0484283850553, "step": 70000}
+{"episode": 80.0, "episode_reward": 935.5357116198904, "step": 80000}
+{"episode": 90.0, "episode_reward": 938.9590801229793, "step": 90000}
+{"episode": 100.0, "episode_reward": 955.9690358846659, "step": 100000}
+{"episode": 110.0, "episode_reward": 956.440861632848, "step": 110000}
+{"episode": 120.0, "episode_reward": 967.2661163232278, "step": 120000}
+{"episode": 130.0, "episode_reward": 955.8369137857107, "step": 130000}
+{"episode": 140.0, "episode_reward": 970.2792440463276, "step": 140000}
+{"episode": 150.0, "episode_reward": 966.0986540142715, "step": 150000}
