@@ -18,6 +18,7 @@ from video import VideoRecorder
 from sac_imitation import SacAeImitationAgent
 from sac_ae import SacAeAgent, BCAgent
 from sac_transfer import SacTransferAgent
+from sac_transfer_imi import SacTransferImitateAgent
 
 from linear_cost import RBFLinearCost
 
@@ -98,6 +99,13 @@ def parse_args():
     parser.add_argument('--no_entropy', default=False, action='store_true')
     parser.add_argument('--gravity', default=-9.8, type=float)
 
+    parser.add_argument('--lts_ratio', default=0.5, type=float)
+    parser.add_argument('--q1', default=False, action='store_true')
+
+    parser.add_argument('--exp_name', default='.', type=str)
+    parser.add_argument('--lts', default=False, action='store_true')
+
+
     args = parser.parse_args()
     return args
 
@@ -120,7 +128,6 @@ def evaluate(env, agent, video, num_episodes, L, step):
 
         video.save('%d.mp4' % step)
         L.log('eval/episode_reward', episode_reward, step)
-    L.dump(step)
 
 
 
@@ -154,7 +161,8 @@ def make_agent(obs_shape, action_shape, args, device):
             decoder_latent_lambda=args.decoder_latent_lambda,
             decoder_weight_lambda=args.decoder_weight_lambda,
             num_layers=args.num_layers,
-            num_filters=args.num_filters
+            num_filters=args.num_filters,
+            no_entropy=args.no_entropy
         )
     else:
         assert 'agent is not supported: %s' % args.agent
@@ -187,32 +195,63 @@ def make_bcagent(obs_shape, action_shape, args, device):
     )
 
 def make_transfer_agent(obs_shape, action_shape, args, device):
-    return SacTransferAgent(
-            obs_shape=obs_shape,
-            action_shape=action_shape,
-            device=device,
-            hidden_dim=args.hidden_dim,
-            discount=args.discount,
-            init_temperature=args.init_temperature,
-            alpha_lr=args.alpha_lr,
-            alpha_beta=args.alpha_beta,
-            actor_lr=args.actor_lr,
-            actor_beta=args.actor_beta,
-            actor_log_std_min=args.actor_log_std_min,
-            actor_log_std_max=args.actor_log_std_max,
-            actor_update_freq=args.actor_update_freq,
-            critic_lr=args.critic_lr,
-            critic_beta=args.critic_beta,
-            critic_tau=args.critic_tau,
-            critic_target_update_freq=args.critic_target_update_freq,
-            encoder_type=args.encoder_type,
-            encoder_feature_dim=args.encoder_feature_dim,
-            encoder_lr=args.encoder_lr,
-            encoder_tau=args.encoder_tau,
-            num_layers=args.num_layers,
-            num_filters=args.num_filters,
-            no_entropy=args.no_entropy
-    )
+    if args.lts:
+        return SacTransferAgent(
+                obs_shape=obs_shape,
+                action_shape=action_shape,
+                device=device,
+                hidden_dim=args.hidden_dim,
+                discount=args.discount,
+                init_temperature=args.init_temperature,
+                alpha_lr=args.alpha_lr,
+                alpha_beta=args.alpha_beta,
+                actor_lr=args.actor_lr,
+                actor_beta=args.actor_beta,
+                actor_log_std_min=args.actor_log_std_min,
+                actor_log_std_max=args.actor_log_std_max,
+                actor_update_freq=args.actor_update_freq,
+                critic_lr=args.critic_lr,
+                critic_beta=args.critic_beta,
+                critic_tau=args.critic_tau,
+                critic_target_update_freq=args.critic_target_update_freq,
+                encoder_type=args.encoder_type,
+                encoder_feature_dim=args.encoder_feature_dim,
+                encoder_lr=args.encoder_lr,
+                encoder_tau=args.encoder_tau,
+                num_layers=args.num_layers,
+                num_filters=args.num_filters,
+                no_entropy=args.no_entropy,
+                lts_ratio=args.lts_ratio,
+                q1=args.q1
+        )
+    else:
+        return SacTransferImitateAgent(
+                obs_shape=obs_shape,
+                action_shape=action_shape,
+                device=device,
+                hidden_dim=args.hidden_dim,
+                discount=args.discount,
+                init_temperature=args.init_temperature,
+                alpha_lr=args.alpha_lr,
+                alpha_beta=args.alpha_beta,
+                actor_lr=args.actor_lr,
+                actor_beta=args.actor_beta,
+                actor_log_std_min=args.actor_log_std_min,
+                actor_log_std_max=args.actor_log_std_max,
+                actor_update_freq=args.actor_update_freq,
+                critic_lr=args.critic_lr,
+                critic_beta=args.critic_beta,
+                critic_tau=args.critic_tau,
+                critic_target_update_freq=args.critic_target_update_freq,
+                encoder_type=args.encoder_type,
+                encoder_feature_dim=args.encoder_feature_dim,
+                encoder_lr=args.encoder_lr,
+                encoder_tau=args.encoder_tau,
+                num_layers=args.num_layers,
+                num_filters=args.num_filters,
+                no_entropy=args.no_entropy,
+        )
+    
 
 def make_imitation_agent(obs_shape, action_shape, args, device):
     return SacAeImitationAgent(
@@ -351,8 +390,7 @@ def rollout(agent, replay_buffer, env, args):
         episode_step += 1
 
 
-def main():
-    args = parse_args()
+def main(args):
     utils.set_seed_everywhere(args.seed)
 
     env = dmc2gym.make(
@@ -546,6 +584,12 @@ def main():
                 L.log('eval/episode', episode, step)
                 #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
                 evaluate(env, agent, video, args.num_eval_episodes, L, step)
+
+                train_data, eval_data = L.get_data(step)
+                wandb.log(eval_data)
+                L.dump(step)
+
+
                 if args.save_model:
                     #expert_agent.save(model_dir, step)
                     agent.save(model_dir, step)
@@ -652,6 +696,11 @@ def main():
     L.log('eval/episode', episode, step)
     #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
     evaluate(env, agent, video, args.num_eval_episodes, L, step)
+
+    train_data, eval_data = L.get_data(step)
+    wandb.log(eval_data)
+    L.dump(step)
+
     if args.save_model:
         #expert_agent.save(model_dir, step)
         agent.save(model_dir, step)
@@ -660,4 +709,13 @@ def main():
         replay_buffer.save(buffer_dir)
 
 if __name__ == '__main__':
-    main()
+    args = parse_args()
+
+    import wandb
+
+    with wandb.init(
+            project="agtr_{}_{}".format(args.domain_name, str(args.gravity)[1:]),
+            job_type="ratio_search",
+            config=vars(args),
+            name=args.exp_name):
+        main(args)
