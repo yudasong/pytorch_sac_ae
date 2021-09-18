@@ -41,7 +41,8 @@ def parse_args():
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
     parser.add_argument('--init_random_steps', default=1000, type=int)
-    parser.add_argument('--init_expert_steps', default=2000, type=int)
+    parser.add_argument('--init_expert_steps', default=5000, type=int)
+    parser.add_argument('--init_training_steps', default=20000, type=int)
 
     parser.add_argument('--num_train_steps', default=150000, type=int)
 
@@ -104,6 +105,8 @@ def parse_args():
 
     parser.add_argument('--exp_name', default='.', type=str)
     parser.add_argument('--lts', default=False, action='store_true')
+
+    parser.add_argument('--no_dac', default=False, action='store_true')
 
 
     args = parser.parse_args()
@@ -605,27 +608,27 @@ def main(args):
             episode += 1
 
             
+            if not args.no_dac:
+                if not cost_function and episode >= args.initial_imitation_episode:
+                    recent_states = replay_buffer.get_recent_next_states()
+                    cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
 
-            if not cost_function and episode >= args.initial_imitation_episode:
-                recent_states = replay_buffer.get_recent_next_states()
-                cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
+                elif episode >= args.initial_imitation_episode:
+                    recent_states = replay_buffer.get_recent_next_states()
+                    cost_function.update_bandwidth(recent_states)
+                    cost_function.update_expert_data(recent_states)
+                    
 
-            elif episode >= args.initial_imitation_episode:
-                recent_states = replay_buffer.get_recent_next_states()
-                cost_function.update_bandwidth(recent_states)
-                cost_function.update_expert_data(recent_states)
-                
+                if cost_function and episode % args.imitation_freq == 0:
+                    dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
+                    #rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
+                    
+                    #recent_states = imitation_rollout_buffer.get_recent_states()
+                    #mmd = cost_function.get_mmd(recent_states)
+                    #print("mmd: {}".format(mmd))
 
-            if cost_function and episode % args.imitation_freq == 0:
-                dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
-                #rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
-                
-                #recent_states = imitation_rollout_buffer.get_recent_states()
-                #mmd = cost_function.get_mmd(recent_states)
-                #print("mmd: {}".format(mmd))
-
-                for s in range(args.num_post_q_updates):
-                    expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
+                    for s in range(args.num_post_q_updates):
+                        expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
                 
                 #expert_agent.save_post_critics(args.work_dir, step)
 
@@ -669,7 +672,7 @@ def main(args):
 
         
         if step >= args.init_expert_steps:
-            num_updates = args.init_expert_steps if step == args.init_expert_steps else 1
+            num_updates = args.init_training_steps if step == args.init_expert_steps else 1
         
 
         #if step >= args.init_random_steps:
@@ -704,7 +707,9 @@ def main(args):
     if args.save_model:
         #expert_agent.save(model_dir, step)
         agent.save(model_dir, step)
-        imitation_agent.save(model_dir, step)
+
+        #if not args.no_dac:
+        #    imitation_agent.save(model_dir, step)
     if args.save_buffer:
         replay_buffer.save(buffer_dir)
 
