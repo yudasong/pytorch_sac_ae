@@ -458,6 +458,37 @@ class SacAeAgent(object):
 
         self.critic.log(L, step)
 
+    def update_critic_multi_step(self, obs, action, rewards, next_obs, not_dones, L, step):
+        h = len(rewards)
+        not_done_yet = not_dones[0]
+        target_Q = rewards[0]
+        with torch.no_grad():
+            for i in range(1,h-1):
+                not_done_yet = torch.logical_and(not_done_yet, not_dones[i])
+                target_Q = target_Q + not_done_yet * self.discount ** i * rewards[i]
+            
+            not_done_yet = torch.logical_and(not_done_yet, not_dones[h-1])
+            _, policy_action, log_pi, _ = self.actor(next_obs[h-1])
+            target_Q1, target_Q2 = self.critic_target(next_obs[h-1], policy_action)
+            target_V = torch.min(target_Q1,
+                                 target_Q2) - self.alpha.detach() * log_pi
+            target_Q = target_Q + (not_done_yet * self.discount**(h-1) * target_V)
+
+        # get current Q estimates
+        current_Q1, current_Q2 = self.critic(obs, action)
+        critic_loss = F.mse_loss(current_Q1,
+                                 target_Q) + F.mse_loss(current_Q2, target_Q)
+
+        if L is not None:
+            L.log('train_critic/loss', critic_loss, step)
+
+        # Optimize the critic
+        self.critic_optimizer.zero_grad()
+        critic_loss.backward()
+        self.critic_optimizer.step()
+
+        self.critic.log(L, step)
+
     def update_actor_and_alpha(self, obs, L, step):
         # detach encoder, so we don't update it with the actor loss
         _, pi, log_pi, log_std = self.actor(obs, detach_encoder=True)
@@ -552,6 +583,29 @@ class SacAeAgent(object):
             self.update_critic(state, action, reward, next_state, not_done, None, step)
         else:
             self.update_critic(obs, action, reward, next_obs, not_done, None, step)
+
+        if step % self.critic_target_update_freq == 0:
+            utils.soft_update_params(
+                self.critic.Q1, self.critic_target.Q1, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.Q2, self.critic_target.Q2, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.encoder, self.critic_target.encoder,
+                self.encoder_tau
+            )
+
+        if self.decoder is not None and step % self.decoder_update_freq == 0:
+            self.update_decoder(obs, obs, L, step)
+
+    def post_update_critic_riro(self,replay_buffer, step, h=5):
+        obs, state, action, rewards, next_obs, next_states, not_dones = replay_buffer.sample(h=h)
+
+        if self.encoder_type == 'identity':
+            self.update_critic_multi_step(state, action, rewards, next_states, not_dones, None, step)
+        else:
+            self.update_critic_multi_step(obs, action, rewards, next_obs, not_dones, None, step)
 
         if step % self.critic_target_update_freq == 0:
             utils.soft_update_params(

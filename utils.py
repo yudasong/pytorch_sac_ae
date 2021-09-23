@@ -236,6 +236,74 @@ class ReplayBuffer(object):
             self.idx = end
 
 
+class MultiStepReplayBuffer(object):
+    """Buffer to store environment transitions."""
+    def __init__(self, obs_shape, state_shape, action_shape, capacity, batch_size, device):
+        self.capacity = capacity
+        self.batch_size = batch_size
+        self.device = device
+
+        # the proprioceptive obs is stored as float32, pixels obs as uint8
+        obs_dtype = np.uint8
+
+        #self.obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        self.states = np.empty((capacity, *state_shape), dtype=np.float32)
+        #self.next_obses = np.empty((capacity, *obs_shape), dtype=np.uint8)
+        self.next_states = np.empty((capacity, *state_shape), dtype=np.float32)
+        self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
+        self.rewards = np.empty((capacity, 1), dtype=np.float32)
+        self.targets = np.empty((capacity, 1), dtype=np.float32)                    
+        self.not_dones = np.empty((capacity, 1), dtype=np.float32)
+
+        self.idx = 0
+        self.last_save = 0
+        self.full = False
+
+    def add(self, obs, state, action, reward, next_obs, next_state, done):
+        #np.copyto(self.obses[self.idx], obs)
+        np.copyto(self.states[self.idx],state)
+        np.copyto(self.actions[self.idx], action)
+        np.copyto(self.rewards[self.idx], reward)
+        #np.copyto(self.next_obses[self.idx], next_obs)
+        np.copyto(self.next_states[self.idx],next_state)
+        np.copyto(self.not_dones[self.idx], not done)
+
+        self.idx = (self.idx + 1) % self.capacity
+        self.full = self.full or self.idx == 0
+
+    def sample(self, h=5):
+        idxs = np.random.randint(
+            0, self.capacity if self.full else self.idx - 5, size=self.batch_size
+        )
+
+        #obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
+        states = torch.as_tensor(self.states[idxs], device=self.device).float()
+        actions = torch.as_tensor(self.actions[idxs], device=self.device)
+        rewards = []
+        next_states = []
+        not_dones = []
+        for i in range(h):
+            rewards.append(torch.as_tensor(self.rewards[idxs+i], device=self.device))
+            next_states.append(torch.as_tensor(self.next_states[idxs+i], device=self.device).float())
+            not_dones.append(torch.as_tensor(self.not_dones[idxs], device=self.device))
+
+        #return obses,states, actions, rewards, next_obses, next_states, not_dones
+        return states,states, actions, rewards, next_states, next_states, not_dones
+
+    def get_episode(self):
+        states = torch.as_tensor(self.states, device=self.device).float()
+        actions = torch.as_tensor(self.actions, device=self.device)
+
+        return states, actions, self.rewards
+
+    def update_reward(self, cost_function):
+        states = torch.as_tensor(self.states[:self.idx], device=self.device).float()
+        costs = -1.0 * cost_function.get_costs(states).cpu().numpy()
+        self.rewards[:self.idx] = costs
+        
+
+
+
 class FrameStack(gym.Wrapper):
     def __init__(self, env, k):
         gym.Wrapper.__init__(self, env)
