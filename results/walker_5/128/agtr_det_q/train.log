@@ -1,0 +1,9 @@
+{"episode": 1.0, "duration": 16.764108896255493, "episode_reward": 58.61337562337205, "step": 1000}
+{"episode": 2.0, "duration": 1.3800485134124756, "episode_reward": 632.427646246406, "step": 2000}
+{"episode": 3.0, "batch_reward": 0.33908250460866374, "actor_loss": -69.5412903289978, "duration": 52.91901445388794, "episode_reward": 252.86777825828293, "step": 3000}
+{"episode": 4.0, "batch_reward": 0.3275024985074997, "actor_loss": -69.55774696350097, "duration": 17.41224217414856, "episode_reward": 398.3095607621882, "step": 4000}
+{"episode": 5.0, "batch_reward": 0.3458397077023983, "actor_loss": -69.99846369934082, "duration": 16.636911630630493, "episode_reward": 477.0089030313559, "step": 5000}
+{"episode": 6.0, "batch_reward": 0.3819456534981728, "actor_loss": -70.82576281738281, "duration": 16.9316565990448, "episode_reward": 594.9918228449595, "step": 6000}
+{"episode": 7.0, "batch_reward": 0.4160695759356022, "actor_loss": -71.53076477050782, "duration": 17.275217294692993, "episode_reward": 677.9932614916693, "step": 7000}
+{"episode": 8.0, "batch_reward": 0.4527040778398514, "actor_loss": -72.34729354858399, "duration": 17.39578676223755, "episode_reward": 659.1507050811643, "step": 8000}
+{"episode": 9.0, "batch_reward": 0.4837110776901245, "actor_loss": -73.03437474060058, "duration": 17.171343564987183, "episode_reward": 752.3926753589411, "step": 9000}

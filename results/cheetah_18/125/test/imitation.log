@@ -1,0 +1,5 @@
+{"mmd_loss": 0.10099148005247116, "episode": 2.0, "episode_reward": 0.7007760057862658, "step": 1000}
+{"batch_reward": -0.27915407632206296, "critic_loss": 0.15785561608536555, "actor_loss": 0.872232984677741, "actor_target_entropy": -6.0, "actor_entropy": 5.312008819503632, "alpha_loss": 0.8247538772756924, "alpha_value": 0.09755042068556573, "mmd_loss": 0.08539324998855591, "episode": 3.0, "episode_reward": 2.4240380920254063, "step": 2000}
+{"batch_reward": -0.24615444518625737, "critic_loss": 0.008909419790608808, "actor_loss": 0.3310549048364628, "actor_target_entropy": -6.0, "actor_entropy": 7.421079522132874, "alpha_loss": 0.9091139366626739, "alpha_value": 0.09245189178601859, "mmd_loss": 0.06780166178941727, "episode": 4.0, "episode_reward": 5.619844046560778, "step": 3000}
+{"batch_reward": -0.20619094094634055, "critic_loss": 0.006474434284726158, "actor_loss": -0.3877909039137885, "actor_target_entropy": -6.0, "actor_entropy": 7.597996812820434, "alpha_loss": 0.8554381710290909, "alpha_value": 0.08796727331548994, "step": 4000}
+{"mmd_loss": 0.016859326511621475, "episode": 1.0, "episode_reward": 0.0, "step": 0}

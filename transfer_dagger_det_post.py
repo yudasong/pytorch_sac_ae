@@ -37,6 +37,7 @@ def parse_args():
     parser.add_argument('--expert_replay_buffer_capacity', default=1000000, type=int)
     parser.add_argument('--imitation_replay_buffer_capacity', default=500000, type=int)
     parser.add_argument('--imitation_rollout_buffer_capacity', default=100000, type=int)
+    parser.add_argument('--riro_replay_buffer_capacity', default=1000000, type=int)
 
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
@@ -49,7 +50,7 @@ def parse_args():
     parser.add_argument('--num_post_q_updates', default=5000, type=int)
     parser.add_argument('--initial_imitation_episode', default=10,type=int)
     parser.add_argument('--num_imitation_train_steps', default=40000, type=int)
-    parser.add_argument('--num_imitation_rollout_steps', default=20000, type=int)
+    parser.add_argument('--num_post_rollout_steps', default=20000, type=int)
     parser.add_argument('--imitation_freq', default=2, type=int)
 
     parser.add_argument('--batch_size', default=128, type=int)
@@ -370,16 +371,16 @@ def riro(imi_agent, sim_agent, replay_buffer, env, args):
             episode_reward = 0
             episode_step = 0
             episode += 1
-
-        with utils.eval_mode(agent):
-
-            if episode_step < switch_timestep:
-                if agent.encoder_type == 'identity':
+        
+        if episode_step < switch_timestep:
+            with utils.eval_mode(imi_agent):
+                if imi_agent.encoder_type == 'identity':
                     action = imi_agent.sample_action(state)
                 else:
                     action = imi_agent.sample_action(obs)
-            else:
-                if agent.encoder_type == 'identity':
+        else:
+            with utils.eval_mode(sim_agent):
+                if sim_agent.encoder_type == 'identity':
                     action = sim_agent.sample_action(state)
                 else:
                     action = sim_agent.sample_action(obs)
@@ -468,7 +469,7 @@ def main(args):
         obs_shape=env.observation_space.shape,
         state_shape=env.state_space.shape,
         action_shape=env.action_space.shape,
-        capacity=args.replay_buffer_capacity,
+        capacity=args.riro_replay_buffer_capacity,
         batch_size=args.batch_size,
         device=device
     )
