@@ -37,7 +37,7 @@ def parse_args():
     parser.add_argument('--expert_replay_buffer_capacity', default=1000000, type=int)
     parser.add_argument('--imitation_replay_buffer_capacity', default=500000, type=int)
     parser.add_argument('--imitation_rollout_buffer_capacity', default=100000, type=int)
-    parser.add_argument('--riro_replay_buffer_capacity', default=1000000, type=int)
+    parser.add_argument('--riro_replay_buffer_capacity', default=1400000, type=int)
 
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
@@ -108,7 +108,7 @@ def parse_args():
     parser.add_argument('--lts', default=False, action='store_true')
 
     parser.add_argument('--no_dac', default=False, action='store_true')
-    parser.add_argument('--riro_update_h', default=5, type=int)
+    parser.add_argument('--riro_update_h', default=2, type=int)
 
 
 
@@ -644,15 +644,22 @@ def main(args):
                     #mmd = cost_function.get_mmd(recent_states)
                     #print("mmd: {}".format(mmd))
 
-                    for s in range(args.num_post_q_updates):
-                        expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
+                    post_error = []
+                    riro_error = []
 
                     for s in range(args.num_post_q_updates):
-                        expert_agent.post_update_critic_riro(riro_replay_buffer,s,h=args.riro_update_h)
-                
+                        post_e = expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
+                        riro_e = expert_agent.post_update_critic_riro(riro_replay_buffer,s,h=args.riro_update_h)
+                		post_error.append(post_e)
+                		riro_error.append(riro_e)
+
                 #expert_agent.save_post_critics(args.work_dir, step)
 
-
+            		wandb.log({
+            				"post_error": np.mean(post_error),
+            				"riro_error": np.mean(riro_error),
+            				"step": step
+            			})
             L.log('train/episode', episode, step)
 
 

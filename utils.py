@@ -285,7 +285,7 @@ class MultiStepReplayBuffer(object):
         for i in range(h):
             rewards.append(torch.as_tensor(self.rewards[idxs+i], device=self.device))
             next_states.append(torch.as_tensor(self.next_states[idxs+i], device=self.device).float())
-            not_dones.append(torch.as_tensor(self.not_dones[idxs], device=self.device))
+            not_dones.append(torch.as_tensor(self.not_dones[idxs+i], device=self.device))
 
         #return obses,states, actions, rewards, next_obses, next_states, not_dones
         return states,states, actions, rewards, next_states, next_states, not_dones
