@@ -465,13 +465,13 @@ class SacAeAgent(object):
         not_done_yet = not_dones[0]
         target_Q = rewards[0]
         with torch.no_grad():
-            for i in range(1,h-1):
+            for i in range(1,h):
                 
                 target_Q = target_Q + not_done_yet * self.discount ** i * rewards[i]
                 not_done_yet = torch.logical_and(not_done_yet, not_dones[i])
 
-            target_Q = target_Q + not_done_yet * self.discount ** (h-1) * rewards[h-1]
-            not_done_yet = torch.logical_and(not_done_yet, not_dones[h-1])
+            #target_Q = target_Q + not_done_yet * self.discount ** (h-1) * rewards[h-1]
+            #not_done_yet = torch.logical_and(not_done_yet, not_dones[h-1])
             _, policy_action, log_pi, _ = self.actor(next_obs[h-1])
             target_Q1, target_Q2 = self.critic_target(next_obs[h-1], policy_action)
             target_V = torch.min(target_Q1,
