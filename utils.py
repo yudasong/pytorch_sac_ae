@@ -271,6 +271,25 @@ class MultiStepReplayBuffer(object):
         self.idx = (self.idx + 1) % self.capacity
         self.full = self.full or self.idx == 0
 
+
+    def sample_single(self):
+        idxs = np.random.randint(
+            0, self.capacity if self.full else self.idx, size=self.batch_size
+        )
+
+        #obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
+        states = torch.as_tensor(self.states[idxs], device=self.device).float()
+        actions = torch.as_tensor(self.actions[idxs], device=self.device)
+        rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
+        #next_obses = torch.as_tensor(
+        #    self.next_obses[idxs], device=self.device
+        #).float()
+        next_states = torch.as_tensor(self.next_states[idxs], device=self.device).float()
+        not_dones = torch.as_tensor(self.not_dones[idxs], device=self.device)
+
+        #return obses,states, actions, rewards, next_obses, next_states, not_dones
+        return states,states, actions, rewards, next_states, next_states, not_dones
+
     def sample(self, h=5):
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx - 5, size=self.batch_size

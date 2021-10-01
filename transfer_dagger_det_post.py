@@ -645,19 +645,19 @@ def main(args):
                     #print("mmd: {}".format(mmd))
 
                     post_error = []
-                    riro_error = []
+                    #riro_error = []
 
                     for s in range(args.num_post_q_updates):
-                        post_e = expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
-                        riro_e = expert_agent.post_update_critic_riro(riro_replay_buffer,s,h=args.riro_update_h)
+                        post_e = expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,riro_replay_buffer, s)
+                        #riro_e = expert_agent.post_update_critic_riro(riro_replay_buffer,s,h=args.riro_update_h)
                         post_error.append(post_e)
-                        riro_error.append(riro_e)
+                        #riro_error.append(riro_e)
 
                 #expert_agent.save_post_critics(args.work_dir, step)
 
                     wandb.log({
                             "post_error": np.mean(post_error),
-                            "riro_error": np.mean(riro_error),
+                            #"riro_error": np.mean(riro_error),
                             "step": step
                         })
             L.log('train/episode', episode, step)

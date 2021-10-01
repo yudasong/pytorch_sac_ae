@@ -463,11 +463,11 @@ class SacAeAgent(object):
     def update_critic_multi_step(self, obs, action, rewards, next_obs, not_dones, L, step):
         h = len(rewards)
         not_done_yet = not_dones[0]
-        target_Q = rewards[0]
+        target_Q_h = rewards[0]
         with torch.no_grad():
             for i in range(1,h):
                 
-                target_Q = target_Q + not_done_yet * self.discount ** i * rewards[i]
+                target_Q_h = target_Q_h + not_done_yet * self.discount ** i * rewards[i]
                 not_done_yet = torch.logical_and(not_done_yet, not_dones[i])
 
             #target_Q = target_Q + not_done_yet * self.discount ** (h-1) * rewards[h-1]
@@ -476,12 +476,21 @@ class SacAeAgent(object):
             target_Q1, target_Q2 = self.critic_target(next_obs[h-1], policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - self.alpha.detach() * log_pi
-            target_Q = target_Q + (not_done_yet * self.discount**h * target_V)
+            target_Q_h = target_Q_h + (not_done_yet * self.discount**h * target_V)
 
             #print("target:", target_Q)
 
+        with torch.no_grad():
+            _, policy_action, log_pi, _ = self.actor(next_obs[0])
+            target_Q1, target_Q2 = self.critic_target(next_obs[0], policy_action)
+            target_V = torch.min(target_Q1,
+                                 target_Q2) - self.alpha.detach() * log_pi
+            target_Q_1 = reward[0] + (not_done[0] * self.discount * target_V)
+
         # get current Q estimates
         current_Q1, current_Q2 = self.critic(obs, action)
+
+        target_Q = (target_Q1 + target_Q_h) / 2 
 
         #print("current:", current_Q1)
         critic_loss = F.mse_loss(current_Q1,
@@ -583,11 +592,13 @@ class SacAeAgent(object):
         if self.decoder is not None and step % self.decoder_update_freq == 0:
             self.update_decoder(obs, obs, L, step)
 
-    def post_update_critic(self,replay_buffer, imitation_replay_buffer, step):
-        if np.random.rand() > 0.5:
+    def post_update_critic(self,replay_buffer, imitation_replay_buffer, riro_buffer, step):
+        if np.random.rand() > 0.4:
             obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
-        else:
+        elif np.random.rand() > 0.7:
             obs, state, action, reward, next_obs, next_state, not_done = imitation_replay_buffer.sample()
+        else:
+            obs, state, action, reward, next_obs, next_state, not_done = riro_buffer.sample_single()
 
         if self.encoder_type == 'identity':
             critic_error = self.update_critic(state, action, reward, next_state, not_done, None, step)
