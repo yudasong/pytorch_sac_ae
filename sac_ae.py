@@ -461,36 +461,38 @@ class SacAeAgent(object):
         return critic_loss.item()
 
     def update_critic_multi_step(self, obs, action, rewards, next_obs, not_dones, L, step):
-        h = len(rewards)
-        not_done_yet = not_dones[0]
-        target_Q_h = rewards[0]
-        with torch.no_grad():
-            for i in range(1,h):
-                
-                target_Q_h = target_Q_h + not_done_yet * self.discount ** i * rewards[i]
-                not_done_yet = torch.logical_and(not_done_yet, not_dones[i])
+        H = len(rewards)
+        target_Q = torch.zeros_like(rewards[0])
+        for h in range(1,H+1):            
+            not_done_yet = not_dones[0]
+            target_Q_h = rewards[0]
+            with torch.no_grad():
+                for i in range(1,h):
+                    target_Q_h = target_Q_h + not_done_yet * self.discount ** i * rewards[i]
+                    not_done_yet = torch.logical_and(not_done_yet, not_dones[i])
 
-            #target_Q = target_Q + not_done_yet * self.discount ** (h-1) * rewards[h-1]
-            #not_done_yet = torch.logical_and(not_done_yet, not_dones[h-1])
-            _, policy_action, log_pi, _ = self.actor(next_obs[h-1])
-            target_Q1, target_Q2 = self.critic_target(next_obs[h-1], policy_action)
-            target_V = torch.min(target_Q1,
-                                 target_Q2) - self.alpha.detach() * log_pi
-            target_Q_h = target_Q_h + (not_done_yet * self.discount**h * target_V)
-
+                #target_Q = target_Q + not_done_yet * self.discount ** (h-1) * rewards[h-1]
+                #not_done_yet = torch.logical_and(not_done_yet, not_dones[h-1])
+                _, policy_action, log_pi, _ = self.actor(next_obs[h-1])
+                target_Q1, target_Q2 = self.critic_target(next_obs[h-1], policy_action)
+                target_V = torch.min(target_Q1,
+                                    target_Q2) - self.alpha.detach() * log_pi
+                target_Q_h = target_Q_h + (not_done_yet * self.discount**h * target_V)
+            
+            target_Q = target_Q + target_Q_h 
             #print("target:", target_Q)
-
+        '''
         with torch.no_grad():
             _, policy_action, log_pi, _ = self.actor(next_obs[0])
             target_Q1, target_Q2 = self.critic_target(next_obs[0], policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - self.alpha.detach() * log_pi
             target_Q_1 = reward[0] + (not_done[0] * self.discount * target_V)
-
+        '''
         # get current Q estimates
         current_Q1, current_Q2 = self.critic(obs, action)
 
-        target_Q = (target_Q1 + target_Q_h) / 2 
+        target_Q = target_Q / H 
 
         #print("current:", current_Q1)
         critic_loss = F.mse_loss(current_Q1,
