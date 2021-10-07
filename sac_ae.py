@@ -374,7 +374,9 @@ class SacAeAgent(object):
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(), lr=actor_lr, betas=(actor_beta, 0.999)
         )
-
+        
+        self.critic_lr = critic_lr
+        self.critic_beta = critic_beta
         self.critic_optimizer = torch.optim.Adam(
             self.critic.parameters(), lr=critic_lr, betas=(critic_beta, 0.999)
         )
@@ -385,6 +387,10 @@ class SacAeAgent(object):
 
         self.train()
         self.critic_target.train()
+    def clear_adam(self):
+        self.critic_optimizer = torch.optim.Adam(
+            self.critic.parameters(), lr=self.critic_lr, betas=(self.critic_beta, 0.999)
+        )
 
     def train(self, training=True):
         self.training = training
@@ -463,7 +469,8 @@ class SacAeAgent(object):
     def update_critic_multi_step(self, obs, action, rewards, next_obs, not_dones, L, step):
         H = len(rewards)
         target_Q = torch.zeros_like(rewards[0])
-        for h in range(1,H+1):            
+        #for h in range(1,H+1):            
+        for h in range(H,H+1):
             not_done_yet = not_dones[0]
             target_Q_h = rewards[0]
             with torch.no_grad():
@@ -492,7 +499,7 @@ class SacAeAgent(object):
         # get current Q estimates
         current_Q1, current_Q2 = self.critic(obs, action)
 
-        target_Q = target_Q / H 
+        #target_Q = target_Q / H 
 
         #print("current:", current_Q1)
         critic_loss = F.mse_loss(current_Q1,
