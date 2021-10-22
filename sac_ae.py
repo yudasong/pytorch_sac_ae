@@ -639,6 +639,18 @@ class SacAeAgent(object):
         else:
             critic_error = self.update_critic_multi_step(obs, action, rewards, next_obs, not_dones, None, step)
 
+        if step % self.critic_target_update_freq == 0:
+            utils.soft_update_params(
+                self.critic.Q1, self.critic_target.Q1, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.Q2, self.critic_target.Q2, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.encoder, self.critic_target.encoder,
+                self.encoder_tau
+            )
+
         return critic_error
 
     def save(self, model_dir, step):
