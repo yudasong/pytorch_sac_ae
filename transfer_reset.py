@@ -138,11 +138,11 @@ def evaluate(env, agent, video, num_episodes, L, step):
 def get_value(env, gravity, agent, physics, discount):
     obs, state = env.reset()
     env.set_physics(physics)
-    env.physics.model.opt.gravity[2] = gravity
+    #env.physics.model.opt.gravity[2] = gravity
     done = False
     episode_reward = 0
     step = 0
-    while not done:
+    while (not done) or (step < 300):
         with utils.eval_mode(agent):
             if agent.encoder_type == 'identity':
                 action = agent.sample_action(state)
@@ -472,9 +472,9 @@ def main(args):
         returns = get_value(source_env, original_gravity, expert_agent, physics, args.discount)
 
         # allow infinit bootstrap
-        #done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
-        #    done
-        #)
+        done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
+            done
+        )
         done_bool = float(done)
         episode_reward += reward
         replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool, returns)
