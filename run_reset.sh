@@ -2,7 +2,7 @@
 
 for env_name in $1; do
     echo "=> Running environment ${env_name}"
-    for random_seed in 125 ; do
+    for random_seed in $4 ; do
     #for random_seed in $2; do
         python transfer_reset.py --domain_name ${env_name} --task_name $2 --exp_name agtr_reset\
         --expert_encoder_type identity --expert_decoder_type identity \
