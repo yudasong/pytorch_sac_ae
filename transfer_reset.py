@@ -145,9 +145,9 @@ def get_value(env, gravity, agent, physics, discount):
     while (not done) and (step < 300):
         with utils.eval_mode(agent):
             if agent.encoder_type == 'identity':
-                action = agent.sample_action(state)
+                action = agent.select_action(state)
             else:
-                action = agent.sample_action(obs)
+                action = agent.select_action(obs)
         obs, state, reward, done, _ = env.step(action)
         episode_reward += discount**step * reward
         step += 1
