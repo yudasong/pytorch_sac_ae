@@ -135,8 +135,9 @@ def evaluate(env, agent, video, num_episodes, L, step):
         video.save('%d.mp4' % step)
         L.log('eval/episode_reward', episode_reward, step)
 
-def get_value(env, gravity, agent, physics, discount):
-    obs, state = env.reset()
+def get_value(env, gravity, agent, physics, next_state, discount):
+    state = next_state
+    env.reset()
     env.set_physics(physics)
     #env.physics.model.opt.gravity[2] = gravity
     done = False
@@ -469,7 +470,7 @@ def main(args):
         next_obs, next_state, reward, done, _ = env.step(action)
 
         physics = env.get_physics()
-        returns = get_value(source_env, original_gravity, expert_agent, physics, args.discount)
+        returns = get_value(source_env, original_gravity, expert_agent, physics, next_state, args.discount)
 
         # allow infinit bootstrap
         done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
