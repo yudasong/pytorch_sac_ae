@@ -173,10 +173,10 @@ class ReplayBuffer(object):
             else:
                 return self.states[:self.idx]
 
-    def sample(self):
+    def sample(self, shuffle=True):
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx, size=self.batch_size
-        )
+        ) if shuffle else np.arange(0, self.batch_size)
 
         #obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
         states = torch.as_tensor(self.states[idxs], device=self.device).float()
@@ -201,7 +201,7 @@ class ReplayBuffer(object):
         states = torch.as_tensor(self.states[:self.idx], device=self.device).float()
         costs = -1.0 * cost_function.get_costs(states).cpu().numpy()
         self.rewards[:self.idx] = costs
-        
+
     def save(self, save_dir):
         if self.idx == self.last_save:
             return

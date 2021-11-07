@@ -19,6 +19,7 @@ from sac_imitation import SacAeImitationAgent
 from sac_ae import SacAeAgent, BCAgent
 from sac_transfer import SacTransferAgent
 from sac_transfer_imi import SacTransferImitateAgent
+from ppo_transfer import PPOTransferAgent
 
 from linear_cost import RBFLinearCost
 
@@ -31,18 +32,22 @@ def parse_args():
     parser.add_argument('--action_repeat', default=1, type=int)
     parser.add_argument('--frame_stack', default=3, type=int)
     parser.add_argument('--env_spec', default='full')
-    
+
     # replay buffer
-    parser.add_argument('--replay_buffer_capacity', default=150000, type=int)
+    parser.add_argument('--replay_buffer_capacity', default=2048, type=int)
     parser.add_argument('--expert_replay_buffer_capacity', default=1000000, type=int)
     parser.add_argument('--imitation_replay_buffer_capacity', default=500000, type=int)
     parser.add_argument('--imitation_rollout_buffer_capacity', default=100000, type=int)
+    
+    # PPO args
+    parser.add_argument('--transfer_agent', default='ppo', type=str, help="ppo or sac_ae")
+    
 
     # train
     parser.add_argument('--agent', default='sac_ae', type=str)
-    parser.add_argument('--init_random_steps', default=1000, type=int)
-    parser.add_argument('--init_expert_steps', default=5000, type=int)
-    parser.add_argument('--init_training_steps', default=20000, type=int)
+    parser.add_argument('--init_random_steps', default=-1, type=int)
+    parser.add_argument('--init_expert_steps', default=-1, type=int)
+    parser.add_argument('--init_training_steps', default=-1, type=int)
 
     parser.add_argument('--num_train_steps', default=150000, type=int)
 
@@ -52,7 +57,7 @@ def parse_args():
     parser.add_argument('--num_imitation_rollout_steps', default=20000, type=int)
     parser.add_argument('--imitation_freq', default=2, type=int)
 
-    parser.add_argument('--batch_size', default=128, type=int)
+    parser.add_argument('--batch_size', default=2048, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
     parser.add_argument('--num_epochs', default=100, type=int)
     # eval
@@ -199,7 +204,8 @@ def make_bcagent(obs_shape, action_shape, args, device):
 
 def make_transfer_agent(obs_shape, action_shape, args, device):
     if args.lts:
-        return SacTransferAgent(
+        if args.transfer_agent == 'sac_ae':
+            return SacTransferAgent(
                 obs_shape=obs_shape,
                 action_shape=action_shape,
                 device=device,
@@ -226,8 +232,18 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
                 no_entropy=args.no_entropy,
                 lts_ratio=args.lts_ratio,
                 q1=args.q1
-        )
+            )
+        elif args.transfer_agent == 'ppo':
+            return PPOTransferAgent(
+                obs_shape=obs_shape,
+                action_shape=action_shape,
+                device=device
+            )
+        else:
+            assert 'agent is not supported: %s' % args.agent
+
     else:
+        # NOT yet done for ppo
         return SacTransferImitateAgent(
                 obs_shape=obs_shape,
                 action_shape=action_shape,
@@ -294,7 +310,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
     else:
         num_imitation_train_steps = args.num_imitation_train_steps
     episode, episode_reward, done = 0, 0, True
-    
+
     start_time = time.time()
     for step in range(num_imitation_train_steps):
         if done:
@@ -315,7 +331,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
                 L.log('imitation/mmd_loss', mmd_loss, step)
 
                 imitation_replay_buffer.update_reward(cost_function)
-                
+
 
                 L.log('imitation/episode', episode, step)
                 L.log('imitation/episode_reward', episode_reward, step)
@@ -327,7 +343,7 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
         if imitation_replay_buffer.idx < args.init_random_steps and episode == args.initial_imitation_episode:
         #if False:
             action = env.action_space.sample()                
-        
+
         else:
             with utils.eval_mode(agent):
 
@@ -335,10 +351,10 @@ def dac(agent, env, cost_function, imitation_replay_buffer, L, episode, args):
                     action = agent.sample_action(state)
                 else:
                     action = agent.sample_action(obs)
-        
+
         if imitation_replay_buffer.idx > args.init_random_steps or episode > args.initial_imitation_episode:
             num_updates = args.init_random_steps if (imitation_replay_buffer.idx == args.init_random_steps and episode == args.initial_imitation_episode) else 1
-        
+
             for _ in range(num_updates):
                 agent.update(imitation_replay_buffer, L, step)
                 #expert_agent.update(replay_buffer, L, step)
@@ -422,7 +438,6 @@ def main(args):
     source_env.seed(args.seed)
 
     # stack several consecutive frames together
-    #if args.encoder_type == 'pixel':
     env = utils.FrameStack(env, k=args.frame_stack)
 
     utils.make_dir(args.work_dir)
@@ -524,9 +539,6 @@ def main(args):
             args=args,
             device=device
         )
-        #bc_agent.load(os.path.join(args.work_dir, 'bc_model'),90)
-        #print("bc loaded.")
-
         agent = make_transfer_agent(
             obs_shape=env.observation_space.shape,
             action_shape=env.action_space.shape,
@@ -541,8 +553,6 @@ def main(args):
             args=args,
             device=device
         )
-        #bc_agent.load(os.path.join(args.work_dir, 'bc_model_state'),90)
-        #print("bc loaded.")
 
         agent = make_transfer_agent(
             obs_shape=env.state_space.shape,
@@ -555,19 +565,11 @@ def main(args):
 
     expert_agent.load(os.path.join(args.expert_dir, 'model'),990000, no_entropy=args.no_entropy)
     expert_replay_buffer.load(os.path.join(args.expert_dir, 'buffer'))
-    
-    #if args.expert_encoder_type == 'pixel':
-    #    agent.warm_start_from(expert_agent)
-    agent.load(os.path.join(args.expert_dir, 'model'),990000, no_entropy=args.no_entropy)
 
     print("expert loaded.")
 
 
     L = Logger(args.work_dir, use_tb=args.save_tb)
-
-    #L.log('eval/episode', 0, 0)
-    #evaluate(env, bc_agent, video, args.num_eval_episodes, L, 0)
-
 
     cost_function = None
 
@@ -589,7 +591,7 @@ def main(args):
                 evaluate(env, agent, video, args.num_eval_episodes, L, step)
 
                 train_data, eval_data = L.get_data(step)
-                wandb.log(eval_data)
+                #wandb.log(eval_data)
                 L.dump(step)
 
 
@@ -599,7 +601,7 @@ def main(args):
                 if args.save_buffer:
                     replay_buffer.save(buffer_dir)
 
-            
+
 
             obs, state = env.reset()
             done = False
@@ -607,29 +609,28 @@ def main(args):
             episode_step = 0
             episode += 1
 
-            
-            if not args.no_dac:
-                if not cost_function and episode >= args.initial_imitation_episode:
-                    recent_states = replay_buffer.get_recent_next_states()
-                    cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
+            #if not args.no_dac:
+            #    if not cost_function and episode >= args.initial_imitation_episode:
+            #        recent_states = replay_buffer.get_recent_next_states()
+            #        cost_function = RBFLinearCost(recent_states, device, seed=args.seed)
+#
+#                elif episode >= args.initial_imitation_episode:
+#                    recent_states = replay_buffer.get_recent_next_states()
+#                    cost_function.update_bandwidth(recent_states)
+#                    cost_function.update_expert_data(recent_states)
+#
+#
+#                if cost_function and episode % args.imitation_freq == 0:
+#                    dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
+#                    #rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
+#
+#                    #recent_states = imitation_rollout_buffer.get_recent_states()
+#                    #mmd = cost_function.get_mmd(recent_states)
+#                    #print("mmd: {}".format(mmd))
+#
+#                    for s in range(args.num_post_q_updates):
+#                        expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
 
-                elif episode >= args.initial_imitation_episode:
-                    recent_states = replay_buffer.get_recent_next_states()
-                    cost_function.update_bandwidth(recent_states)
-                    cost_function.update_expert_data(recent_states)
-                    
-
-                if cost_function and episode % args.imitation_freq == 0:
-                    dac(imitation_agent, source_env, cost_function, imitation_replay_buffer, L, episode, args)
-                    #rollout(imitation_agent, imitation_rollout_buffer, source_env, args)
-                    
-                    #recent_states = imitation_rollout_buffer.get_recent_states()
-                    #mmd = cost_function.get_mmd(recent_states)
-                    #print("mmd: {}".format(mmd))
-
-                    for s in range(args.num_post_q_updates):
-                        expert_agent.post_update_critic(expert_replay_buffer, imitation_replay_buffer,s)
-                
                 #expert_agent.save_post_critics(args.work_dir, step)
 
 
@@ -638,19 +639,19 @@ def main(args):
 
 
 
-        # sample action for data collection
+        ## sample action for data collection
         if step < args.init_random_steps:
         #if False:
-            action = env.action_space.sample()        
-        
+            action = env.action_space.sample()
+
         elif step < args.init_expert_steps:
-            
+
             if expert_agent.encoder_type == 'identity':
                 action = expert_agent.sample_action(state)
             else:
                 action = expert_agent.sample_action(obs)
-        
-        
+
+
         else:
             with utils.eval_mode(agent):
                 '''
@@ -659,6 +660,7 @@ def main(args):
                 else:
                     action = expert_agent.sample_action(obs)
                 '''
+                # Note: keep eps greedy for PPO
                 if np.random.rand() > 0.05:
                 #if True:
                     if agent.encoder_type == 'identity':
@@ -670,16 +672,17 @@ def main(args):
 
         # run training update
 
-        
-        if step >= args.init_expert_steps:
-            num_updates = args.init_training_steps if step == args.init_expert_steps else 1
-        
+
+        #if step >= args.init_expert_steps:
+        #    num_updates = args.init_training_steps if step == args.init_expert_steps else 1
+
 
         #if step >= args.init_random_steps:
         #    num_updates = args.init_random_steps if step == args.init_random_steps else 1
-        
-            for _ in range(num_updates):
-                agent.update(replay_buffer, bc_agent, expert_agent, L, step, total_steps = args.num_train_steps)
+
+        #for _ in range(num_updates):
+        if (step+1) % args.batch_size == 0:
+            agent.update(replay_buffer, bc_agent, expert_agent, L, step, total_steps = args.num_train_steps)
                 #expert_agent.update(replay_buffer, L, step)
         next_obs, next_state, reward, done, _ = env.step(action)
 
@@ -693,34 +696,30 @@ def main(args):
         obs = next_obs
         state = next_state
         episode_step += 1
-    
+
 
     step += 1
     L.log('eval/episode', episode, step)
-    #evaluate(env, expert_agent, video, args.num_eval_episodes, L, step)
     evaluate(env, agent, video, args.num_eval_episodes, L, step)
 
     train_data, eval_data = L.get_data(step)
-    wandb.log(eval_data)
+    #wandb.log(eval_data)
     L.dump(step)
 
     if args.save_model:
-        #expert_agent.save(model_dir, step)
         agent.save(model_dir, step)
 
-        #if not args.no_dac:
-        #    imitation_agent.save(model_dir, step)
     if args.save_buffer:
         replay_buffer.save(buffer_dir)
 
 if __name__ == '__main__':
     args = parse_args()
 
-    import wandb
+    #import wandb
 
-    with wandb.init(
-            project="agtr_{}_{}".format(args.domain_name, str(args.gravity)[1:]),
-            job_type="ratio_search",
-            config=vars(args),
-            name=args.exp_name):
-        main(args)
+    #with wandb.init(
+    #        project="agtr_{}_{}".format(args.domain_name, str(args.gravity)[1:]),
+    #        job_type="ratio_search",
+    #        config=vars(args),
+    #        name=args.exp_name):
+    main(args)
