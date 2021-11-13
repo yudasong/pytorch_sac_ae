@@ -15,7 +15,8 @@ FORMAT_CONFIG = {
             ('duration', 'D', 'time'), ('episode_reward', 'R', 'float'),
             ('batch_reward', 'BR', 'float'), ('actor_loss', 'ALOSS', 'float'),
             ('critic_loss', 'CLOSS', 'float'), ('ae_loss', 'RLOSS', 'float'),
-            ('alpha_value', 'AVALUE', 'float')
+            ('alpha_value', 'AVALUE', 'float'), ('grad_norm', 'GNORM', 'float'),
+            ('return_var', 'RETVAR', 'float')
         ],
         'eval': [('step', 'S', 'int'), ('episode_reward', 'ER', 'float')],
         'imitation': [

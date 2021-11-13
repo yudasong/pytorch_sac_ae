@@ -8,6 +8,35 @@ from collections import deque
 import random
 from torch import distributions as pyd
 from torch.distributions.utils import _standard_normal
+from subproc_vec_env import SubprocVecEnv
+
+import dmc2gym
+                                             
+def make_env(args):
+    def _thunk():
+        env = dmc2gym.make(
+            domain_name=args.domain_name,
+            task_name=args.task_name,
+            seed=args.seed,
+            visualize_reward=False,
+            spec=args.env_spec,
+            height=args.image_size,
+            width=args.image_size,
+            frame_skip=args.action_repeat
+        )
+        env.seed(args.seed)
+        #env.physics.model.opt.gravity[2] = args.gravity
+        return env
+    return _thunk
+
+def make_vec_envs(args):
+    envs = [
+        make_env(args)
+        for i in range(args.num_vec_envs)
+    ]
+
+    envs = SubprocVecEnv(envs)
+    return envs
 
 
 class TruncatedNormal(pyd.Normal):

@@ -420,10 +420,11 @@ class SacAeAgent(object):
 
     def select_action_batch(self,obs):
         with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
             mu, _, _, _ = self.actor(
                 obs, compute_pi=False, compute_log_pi=False
             )
-            return mu
+            return mu.cpu().data.numpy()
 
     def sample_action(self, obs):
         with torch.no_grad():
@@ -431,6 +432,12 @@ class SacAeAgent(object):
             obs = obs.unsqueeze(0)
             mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
             return pi.cpu().data.numpy().flatten()
+
+    def sample_action_batch(self,obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
+            return pi.cpu().data.numpy()
 
     def sample_action_with_logpi(self,obs):
         with torch.no_grad():
@@ -440,9 +447,12 @@ class SacAeAgent(object):
             return pi.cpu().data.numpy().flatten(), log_pi.cpu().data.numpy()
 
 
-    def update_critic(self, obs, action, reward, next_obs, not_done, L, step):
+    def update_critic(self, obs, action, reward, next_obs, not_done, L, step, det=False):
         with torch.no_grad():
-            _, policy_action, log_pi, _ = self.actor(next_obs)
+            if det:
+                policy_action, _, log_pi, _ = self.actor(next_obs)
+            else:
+                _, policy_action, log_pi, _ = self.actor(next_obs)
             target_Q1, target_Q2 = self.critic_target(next_obs, policy_action)
             target_V = torch.min(target_Q1,
                                  target_Q2) - self.alpha.detach() * log_pi
@@ -601,6 +611,32 @@ class SacAeAgent(object):
         if self.decoder is not None and step % self.decoder_update_freq == 0:
             self.update_decoder(obs, obs, L, step)
 
+    def post_update_critic_single(self,replay_buffer, step, det=False):
+        
+        obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
+
+        if self.encoder_type == 'identity':
+            critic_error = self.update_critic(state, action, reward, next_state, not_done, None, step, det=det)
+        else:
+            critic_error = self.update_critic(obs, action, reward, next_obs, not_done, None, step, det=det)
+
+        if step % self.critic_target_update_freq == 0:
+            utils.soft_update_params(
+                self.critic.Q1, self.critic_target.Q1, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.Q2, self.critic_target.Q2, self.critic_tau
+            )
+            utils.soft_update_params(
+                self.critic.encoder, self.critic_target.encoder,
+                self.encoder_tau
+            )
+
+        if self.decoder is not None and step % self.decoder_update_freq == 0:
+            self.update_decoder(obs, obs, L, step)
+
+        return critic_error
+
     def post_update_critic(self,replay_buffer, imitation_replay_buffer, riro_buffer, step):
         if np.random.rand() > 0.4:
             obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
@@ -674,13 +710,13 @@ class SacAeAgent(object):
 
     def save_post_critics(self,model_dir,step):
         torch.save(
-            self.critic.state_dict(), '%s/post_critic_%s.pt' % (model_dir, step)
+            self.critic.state_dict(), '%s/det_critic_%s.pt' % (model_dir, step)
         )
         torch.save(
-            self.critic_target.state_dict(), '%s/post_critic_target_%s.pt' % (model_dir, step)
+            self.critic_target.state_dict(), '%s/det_critic_target_%s.pt' % (model_dir, step)
         )
 
-    def load(self, model_dir, step, no_entropy=False, post_step=199999):
+    def load(self, model_dir, step, no_entropy=False, post_step=500000):
         self.actor.load_state_dict(
             torch.load('%s/actor_%s.pt' % (model_dir, step), map_location=self.device)
         )
@@ -688,10 +724,10 @@ class SacAeAgent(object):
         
         if no_entropy:
             self.critic.load_state_dict(
-                torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+                torch.load('%s/det_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
             )
             self.critic_target.load_state_dict(
-                torch.load('%s/post_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
+                torch.load('%s/det_critic_target_%s.pt' % (model_dir, post_step), map_location=self.device)
             )
         else:
             self.critic.load_state_dict(
@@ -710,152 +746,3 @@ class SacAeAgent(object):
                 torch.load('%s/decoder_%s.pt' % (model_dir, step))
             )
 
-
-class BCAgent(object):
-    """SAC+AE algorithm."""
-    def __init__(
-        self,
-        obs_shape,
-        action_shape,
-        device,
-        hidden_dim=256,
-        discount=0.99,
-        init_temperature=0.01,
-        alpha_lr=1e-3,
-        alpha_beta=0.9,
-        actor_lr=1e-3,
-        actor_beta=0.9,
-        actor_log_std_min=-10,
-        actor_log_std_max=2,
-        actor_update_freq=2,
-        critic_lr=1e-3,
-        critic_beta=0.9,
-        critic_tau=0.005,
-        critic_target_update_freq=2,
-        encoder_type='identity',
-        encoder_feature_dim=50,
-        encoder_lr=1e-3,
-        encoder_tau=0.005,
-        num_layers=4,
-        num_filters=32
-    ):
-        self.device = device
-        self.discount = discount
-        self.critic_tau = critic_tau
-        self.encoder_tau = encoder_tau
-        self.actor_update_freq = actor_update_freq
-        self.critic_target_update_freq = critic_target_update_freq
-        self.encoder_type = encoder_type
-
-        self.actor = BCActor(
-            obs_shape, action_shape, hidden_dim, encoder_type,
-            encoder_feature_dim, actor_log_std_min, actor_log_std_max,
-            num_layers, num_filters
-        ).to(device)
-
-        self.value_net = VNet(
-            obs_shape, hidden_dim, encoder_type,
-            encoder_feature_dim, num_layers, num_filters
-        ).to(device)
-
-        self.actor.encoder.copy_conv_weights_from(self.value_net.encoder)
-
-        # optimizers
-        self.actor_optimizer = torch.optim.Adam(
-            self.actor.parameters(), lr=actor_lr, betas=(actor_beta, 0.999)
-        )
-
-        self.V_optimizer = torch.optim.Adam(
-            self.value_net.parameters(), lr=critic_lr, betas=(critic_beta, 0.999)
-        )
-
-        self.train()
-
-    def warm_start_from(self,expert):
-        self.value_net.encoder.duplicate_conv_weights_from(expert.critic.encoder)
-
-    def train(self, training=True):
-        self.training = training
-        self.actor.train(training)
-
-    def select_action(self, obs):
-        with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(self.device)
-            obs = obs.unsqueeze(0)
-            mu = self.actor(
-                obs)
-            return mu.cpu().data.numpy().flatten()
-
-    def sample_action(self, obs):
-        with torch.no_grad():
-            obs = torch.FloatTensor(obs).to(self.device)
-            obs = obs.unsqueeze(0)
-            mu, pi, _, _ = self.actor(obs, compute_log_pi=False)
-            return pi.cpu().data.numpy().flatten()
-
-    def update_actor(self, obs, state, exp_action, L, step):
-        # detach encoder, so we don't update it with the actor loss
-        if self.encoder_type == 'identity':
-            mu = self.actor(state, detach_encoder=False)
-        else:
-            mu = self.actor(obs, detach_encoder=False)
-
-        actor_loss = F.mse_loss(mu,exp_action)
-
-        L.log('train_actor/loss', actor_loss, step)
-
-        # optimize the actor
-        self.actor_optimizer.zero_grad()
-        actor_loss.backward()
-        self.actor_optimizer.step()
-
-    def update_value(self, expert, obs, state, L, step):
-        with torch.no_grad():
-            if expert.encoder_type == 'identity':
-                _, policy_action, log_pi, _ = expert.actor(state)
-                target_Q1, target_Q2 = expert.critic_target(state, policy_action)
-            else:
-                _, policy_action, log_pi, _ = expert.actor(obs)
-                target_Q1, target_Q2 = expert.critic_target(obs, policy_action)
-            target_V = torch.min(target_Q1,
-                                 target_Q2) - expert.alpha.detach() * log_pi
-        
-        if self.encoder_type == 'identity':
-            current_V = self.value_net(state)
-        else:
-            current_V = self.value_net(obs)
-
-        V_loss = F.mse_loss(current_V, target_V)
-
-        L.log('train_critic/loss', V_loss, step)
-
-        self.V_optimizer.zero_grad()
-        V_loss.backward()
-        self.V_optimizer.step()
-
-    def update(self, expert, replay_buffer, L, step):
-        obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
-        if expert.encoder_type == "identity":
-            expert_actions = expert.select_action_batch(state)
-        else:
-            expert_actions = expert.select_action_batch(obs)
-
-
-        self.update_actor(obs,state,expert_actions, L, step)
-        self.update_value(expert, obs, state, L, step)
-
-    def save(self, model_dir, step):
-        torch.save(
-            self.actor.state_dict(), '%s/bc_actor_%s.pt' % (model_dir, step)
-        )
-        torch.save(
-            self.value_net.state_dict(), '%s/bc_vnet_%s.pt' % (model_dir, step)
-        )
-
-    def load(self, model_dir, step):
-        self.actor.load_state_dict(
-            torch.load('%s/bc_actor_%s.pt' % (model_dir, step))
-        )
-        self.value_net.load_state_dict(
-            torch.load('%s/bc_vnet_%s.pt' % (model_dir, step))
-        )

@@ -306,17 +306,58 @@ class SacTransferReturnDetAgent(object):
 
     def update_ag_critic(self, expert, obs, action, reward, next_obs, not_done, values, L, step):
         with torch.no_grad():
+           target_Q = reward + (not_done * self.discount * values)
 
-            target_Q = reward + (not_done * self.discount * values)
+        
+        # with torch.no_grad():
+
+        #     #target_V1 = torch.zeros(len(obs),1).to(self.device)
+        #     #target_V2 = torch.zeros(len(obs),1).to(self.device)
+        #     #for i in range(10):
+        #     policy_action,_, log_pi, _ = expert.actor(next_obs)
+        #     target_Q1, target_Q2 = expert.critic(next_obs, policy_action)
+        #     #target_V1 = target_V1 + target_Q1 - expert.alpha.detach() * log_pi
+        #     #target_V2 = target_V2 + target_Q2 - expert.alpha.detach() * log_pi
+        #     target_V = torch.min(target_Q1, target_Q2) 
+
+        #     #target_V = bc_agent.value_net(next_obs)
+        #     target_Q = reward + (not_done * self.discount * target_V)
+
+        
+        # with torch.no_grad():
+
+        #     target_V1 = torch.zeros(len(obs),1).to(self.device)
+        #     target_V2 = torch.zeros(len(obs),1).to(self.device)
+        #     for i in range(10):
+        #         _, policy_action, log_pi, _ = expert.actor(next_obs)
+        #         target_Q1, target_Q2 = expert.critic(next_obs, policy_action)
+        #         target_V1 = target_V1 + target_Q1 
+        #         target_V2 = target_V2 + target_Q2 
+        #     target_V = torch.min(target_V1, target_V2) / 10
+        # target_Q = reward + (not_done * self.discount * target_V)
 
         # get current Q estimates
         #current_Q1, current_Q2 = self.critic(obs, action)
         current_Q1 = self.ag_critic(obs, action, detach_encoder=False)
         critic_loss = F.mse_loss(current_Q1,target_Q) 
-        #L.log('train_critic/loss', critic_loss, step)
+        L.log('train_critic/loss', critic_loss, step)
+
+
         # Optimize the critic
         self.ag_critic_optimizer.zero_grad()
         critic_loss.backward()
+
+        total_norm = 0
+        for p in list(filter(lambda p: p.grad is not None, self.ag_critic.parameters())):
+            #print(p)
+            param_norm = p.grad.data.norm(2).item()
+            total_norm += param_norm ** 2
+        total_norm = total_norm ** 0.5
+
+        L.log('train_grad/norm', total_norm, step)
+
+        torch.nn.utils.clip_grad_norm(self.ag_critic.parameters(), 20)
+
         self.ag_critic_optimizer.step()
 
         self.ag_critic.log(L, step)
@@ -342,7 +383,10 @@ class SacTransferReturnDetAgent(object):
         self.actor.log(L, step)
 
     def update(self, replay_buffer, expert, L, step, total_steps=0):
+        #for _ in range(5):
+        #obs, state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample()
         obs, state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample()
+
 
         L.log('train/batch_reward', reward.mean(), step)
 
@@ -367,14 +411,17 @@ class SacTransferReturnDetAgent(object):
             self.ag_critic.state_dict(), '%s/ag_critic_%s.pt' % (model_dir, step)
         )
 
-    def load(self, model_dir, step, no_entropy=False, post_step=199999):
+    def load(self, model_dir, step, no_entropy=False, post_step=500000):
         #self.actor.load_state_dict(
         #    torch.load('%s/actor_%s.pt' % (model_dir, step), map_location=self.device)
         #)
 
         self.ag_critic.load_state_dict(
-                 torch.load('%s/post_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
+                 torch.load('%s/det_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
              )
+        
+        #pass
+
         # else:
         #     self.ag_critic.load_state_dict(
         #         torch.load('%s/critic_%s.pt' % (model_dir, step), map_location=self.device)

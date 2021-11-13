@@ -16,9 +16,11 @@ from logger import Logger
 from video import VideoRecorder
 
 from sac_imitation import SacAeImitationAgent
-from sac_ae import SacAeAgent, BCAgent
+from sac_ae import SacAeAgent
 from sac_transfer import SacTransferAgent
 from sac_transfer_ret_det import SacTransferReturnDetAgent
+from sac_transfer_imi_det import SacTransferImitateDetAgent
+
 
 from linear_cost import RBFLinearCost
 
@@ -98,7 +100,7 @@ def parse_args():
     parser.add_argument('--save_buffer', default=False, action='store_true')
     parser.add_argument('--save_video', default=False, action='store_true')
 
-    parser.add_argument('--no_entropy', default=False, action='store_true')
+    parser.add_argument('--no_entropy', default=True, action='store_true')
     parser.add_argument('--gravity', default=-9.8, type=float)
 
     parser.add_argument('--lts_ratio', default=0.5, type=float)
@@ -110,9 +112,10 @@ def parse_args():
     parser.add_argument('--no_dac', default=False, action='store_true')
     parser.add_argument('--riro_update_h', default=2, type=int)
 
-
+    parser.add_argument('--num_vec_envs', default=4, type=int)
 
     args = parser.parse_args()
+
     return args
 
 
@@ -135,25 +138,36 @@ def evaluate(env, agent, video, num_episodes, L, step):
         video.save('%d.mp4' % step)
         L.log('eval/episode_reward', episode_reward, step)
 
-def get_value(env, gravity, agent, physics, next_state, discount):
-    state = next_state
-    env.reset()
-    env.set_physics(physics)
+def get_value(env, agent, physics, next_state, discount):
+    #state = next_state
+    state = env.reset()
+
+    #print(state)
+
+    for i in range(len(state)):
+        state[i] = next_state
+    
+
+    env.env_method("set_physics",physics)
     #env.physics.model.opt.gravity[2] = gravity
-    done = False
+    done = np.zeros(len(state))
     episode_reward = 0
     step = 0
-    while (not done) and (step < 300):
+    while (not done.any()) and (step < 300):
         with utils.eval_mode(agent):
             if agent.encoder_type == 'identity':
-                action = agent.select_action(state)
+                action = agent.sample_action_batch(state)
             else:
-                action = agent.select_action(obs)
-        obs, state, reward, done, _ = env.step(action)
+                action = agent.sample_action_batch(obs)
+        #print(action)
+        #print(action.shape)
+
+        state, reward, done, _ = env.step(action)
         episode_reward += discount**step * reward
         step += 1
 
-    return episode_reward
+
+    return episode_reward.mean(), episode_reward.var()
 
 
 def make_agent(obs_shape, action_shape, args, device):
@@ -187,7 +201,7 @@ def make_agent(obs_shape, action_shape, args, device):
             decoder_weight_lambda=args.decoder_weight_lambda,
             num_layers=args.num_layers,
             num_filters=args.num_filters,
-            no_entropy=True
+            no_entropy=args.no_entropy
         )
     else:
         assert 'agent is not supported: %s' % args.agent
@@ -267,8 +281,9 @@ def main(args):
         frame_skip=args.action_repeat
     )
     env.seed(args.seed)
-    original_gravity = env.physics.model.opt.gravity[2]
     env.physics.model.opt.gravity[2] = args.gravity
+
+    vec_env = utils.make_vec_envs(args)
 
     source_env = dmc2gym.make(
         domain_name=args.domain_name,
@@ -318,6 +333,15 @@ def main(args):
         device=device
     )
 
+    # replay_buffer = utils.ReplayBuffer(
+    #     obs_shape=env.observation_space.shape,
+    #     state_shape=env.state_space.shape,
+    #     action_shape=env.action_space.shape,
+    #     capacity=args.replay_buffer_capacity,
+    #     batch_size=args.batch_size,
+    #     device=device
+    # )
+
     expert_replay_buffer = utils.ReplayBuffer(
         obs_shape=env.observation_space.shape,
         state_shape=env.state_space.shape,
@@ -363,7 +387,6 @@ def main(args):
         )
 
 
-
     expert_agent.load(os.path.join(args.expert_dir, 'model'),990000, no_entropy=args.no_entropy)
     expert_replay_buffer.load(os.path.join(args.expert_dir, 'buffer'))
     
@@ -377,7 +400,7 @@ def main(args):
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
     #L.log('eval/episode', 0, 0)
-    #evaluate(env, bc_agent, video, args.num_eval_episodes, L, 0)
+
 
 
     cost_function = None
@@ -387,6 +410,11 @@ def main(args):
     for step in range(args.num_train_steps):
         if done:
             if step > 0:
+
+                train_data, eval_data = L.get_data(step)
+                #print(train_data)
+                wandb.log(train_data)
+
 
                 L.log('train/duration', time.time() - start_time, step)
                 L.log('train/episode_reward', episode_reward, step)
@@ -418,7 +446,6 @@ def main(args):
             episode_step = 0
             episode += 1
 
-            
             L.log('train/episode', episode, step)
 
 
@@ -470,13 +497,17 @@ def main(args):
         next_obs, next_state, reward, done, _ = env.step(action)
 
         physics = env.get_physics()
-        returns = get_value(source_env, original_gravity, expert_agent, physics, next_state, args.discount)
+
+        returns, return_var = get_value(vec_env, expert_agent, physics, next_state, args.discount)
+        #returns = 0
+        L.log('train_return/var', return_var, step)
+
+        #print(return_var)
 
         # allow infinit bootstrap
         done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
             done
         )
-        done_bool = float(done)
         episode_reward += reward
         replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool, returns)
 
@@ -491,6 +522,7 @@ def main(args):
     evaluate(env, agent, video, args.num_eval_episodes, L, step)
 
     train_data, eval_data = L.get_data(step)
+    print(train_data)
     wandb.log(eval_data)
     L.dump(step)
 
@@ -502,14 +534,13 @@ def main(args):
         #    imitation_agent.save(model_dir, step)
     if args.save_buffer:
         replay_buffer.save(buffer_dir)
-
 if __name__ == '__main__':
     args = parse_args()
 
     import wandb
 
     with wandb.init(
-            project="agtr_{}_{}".format(args.domain_name, str(args.gravity)[1:]),
+            project="agtr_reset_{}_{}".format(args.domain_name, str(args.gravity)[1:]),
             job_type="ratio_search",
             config=vars(args),
             name=args.exp_name):
