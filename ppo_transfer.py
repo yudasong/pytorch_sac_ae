@@ -25,6 +25,35 @@ def weight_init(m):
         gain = nn.init.calculate_gain('relu')
         nn.init.orthogonal_(m.weight.data[:, :, mid, mid], gain)
 
+def get_flat_params(model):
+    params = []
+    for param in model.parameters():
+        params.append(param.data.view(-1))
+
+    flat_params = torch.cat(params)
+    return flat_params
+
+
+def set_flat_params(model, flat_params):
+    prev_ind = 0
+    for param in model.parameters():
+        flat_size = int(np.prod(list(param.size())))
+        param.data.copy_(
+            flat_params[prev_ind:prev_ind + flat_size].view(param.size()))
+        prev_ind += flat_size
+
+
+def get_flat_grad(net, grad_grad=False):
+    grads = []
+    for param in net.parameters():
+        if grad_grad:
+            grads.append(param.grad.grad.view(-1))
+        else:
+            grads.append(param.grad.view(-1))
+
+    flat_grad = torch.cat(grads)
+    return flat_grad
+
 class Actor(nn.Module):
     """MLP actor network."""
     def __init__(
@@ -213,5 +242,165 @@ class PPOTransferAgent(object):
                 ent_losses.append(ent_loss.item())
                 losses.append(loss.item())
 
+
+class TRPOTransferAgent(object):
+    def __init__(self,
+                 obs_shape,
+                 action_shape,
+                 device,
+                 gamma=0.99,
+                 max_kld=1e-2,
+                 weight_ent=0.0,
+                 hidden_dim=64,
+                 damping=0.1,
+                 cg_steps=10,
+                 encoder_type='identity',
+                 encoder_feature_dim=50,
+                 num_layers=4,
+                 num_filters=32):
+
+
+        self.device = device
+        self.gamma = gamma
+        self.weight_ent = weight_ent
+        self.damping = damping
+        self.cg_steps = cg_steps
+        self.max_kld = max_kld
+
+        self.actor = Actor(
+            obs_shape, action_shape, hidden_dim, encoder_type,
+            encoder_feature_dim, num_layers, num_filters
+        ).to(device)
+
+    def train(self, training=True):
+        self.training = training
+        self.actor.train(training)
+        self.ag_critic.train(training)
+
+    def dist(self, *logits):
+        return Independent(Normal(*logits), 1)
+
+    def select_action(self, obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            obs = obs.unsqueeze(0)
+            mu, _ = self.actor(
+                obs, compute_pi=False, compute_log_pi=False
+            )
+            return mu.cpu().data.numpy().flatten()
+
+    def sample_action(self, obs):
+        with torch.no_grad():
+            obs = torch.FloatTensor(obs).to(self.device)
+            obs = obs.unsqueeze(0)
+            logits = self.actor(obs, compute_log_pi=False)
+            dist = self.dist(*logits)
+            pi = dist.sample()
+            return pi.cpu().data.numpy().flatten()
+
+    def compute_returns_and_advantages(self, obs, next_obs, rewards, not_dones, expert):
+        #TODO: This is where you would put in the critic!
+        returns, advantages = None, None
+        return returns, advantages
+
+    @staticmethod
+    def get_conjugate_gradient(Avp, b, nsteps, residual_tol=1e-10):
+        x = torch.zeros_like(b)
+        r = b.clone()
+        p = b.clone()
+        rdotr = torch.dot(r, r)
+        for i in range(nsteps):
+            _Avp = Avp(p)
+            alpha = rdotr / torch.dot(p, _Avp)
+            x += alpha * p
+            r -= alpha * _Avp
+            new_rdotr = torch.dot(r, r)
+            beta = new_rdotr / rdotr
+            p = r + beta * p
+            rdotr = new_rdotr
+            if rdotr < residual_tol:
+                break
+        return x
+    
+    def linesearch(self, f, init_params, fullstep, expected_improve_rate, max_backtracks=10):
+        with torch.no_grad():
+            fval = f()
+            for (_n_backtracks, stepfrac) in enumerate(.5 ** np.arange(max_backtracks)):
+                new_params = init_params + stepfrac * fullstep
+                set_flat_params(self.actor, new_params)
+                newfval = f()
+                actual_improve = fval - newfval
+                expected_improve = expected_improve_rate * stepfrac
+                ratio = actual_improve / expected_improve
+                if self.verbose > 0:
+                    logger.log("a/e/r ", actual_improve.item(), expected_improve.item(), ratio.item())
+                if ratio.item() > self.linesearch_accepted_ratio and actual_improve.item() > 0:
+                    return True, new_params
+            return False, init_params
+    
+    def compute_logp_old(self, obs, act):
+        with torch.no_grad():
+            logits = self.actor.forward(obs)
+            return self.dist(*logits).log_prob(act)
+
+    def update(self, replay_buffer, bc_agent, expert, L, step, total_steps=0):
+        # NOTE: currently not doing dual clipping trick, reward normalization, or learning rate scheduler
+        obs, state, action, reward, next_obs, next_state, not_done = replay_buffer.sample()
+        L.log('train/batch_reward', reward.mean(), step)
+        _, advantages = self.compute_returns_and_advantages(obs, next_obs, reward, not_done, expert)
+
+        losses = []
+
+        # Start of TRPO update
+        logp_old = self.compute_logp_old(obs, action)
+
+        def get_action_loss():
+            logits = self.actor.forward(obs)
+            dist = self.dist(*logits)
+            log_prob = dist.log_prob(action)
+            entropy = dist.entropy().mean()
+            action_loss_ = - advantages * torch.exp(log_prob - logp_old) - self.weight_ent * entropy
+            return action_loss_.mean()
+
+        def get_kl():
+            action_means, action_stds = self.actor.forward(obs)
+            action_logstds = torch.log(action_stds)
+
+            fixed_action_means = action_means.detach()
+            fixed_action_logstds = action_logstds.detach()
+            fixed_action_stds = action_stds.detach()
+            kl = action_logstds - fixed_action_logstds + \
+                 (fixed_action_stds.pow(2) + (fixed_action_means - action_means).pow(2)) / \
+                 (2.0 * action_stds.pow(2)) - 0.5
+            return kl.sum(1, keepdim=True)
+
+        action_loss = get_action_loss()
+        action_loss_grad = torch.autograd.grad(action_loss, self.actor.parameters())
+        flat_action_loss_grad = torch.cat([grad.view(-1) for grad in action_loss_grad]).data
+        
+        def Fvp(v):
+            kl = get_kl()
+            kl = kl.mean()
+
+            kld_grad = torch.autograd.grad(kl, self.actor.parameters(), create_graph=True)
+            flat_kld_grad = torch.cat([grad.view(-1) for grad in kld_grad])
+
+            kl_v = (flat_kld_grad * v).sum()
+            kld_grad_grad = torch.autograd.grad(kl_v, self.actor.parameters())
+            flat_kld_grad_grad = torch.cat([grad.contiguous().view(-1) for grad in kld_grad_grad]).data
+
+            return flat_kld_grad_grad + v * self.damping
+
+        stepdir = self.get_conjugate_gradient(Fvp, -flat_action_loss_grad, self.cg_steps)
+
+        shs = 0.5 * (stepdir * Fvp(stepdir)).sum(0)
+
+        lm = torch.sqrt(shs / self.max_kld)
+        fullstep = stepdir / lm
+
+        neggdotstepdir = (-flat_action_loss_grad * stepdir).sum(0, keepdim=True)
+        prev_params = get_flat_params(self.actor)
+        success, new_params = self.linesearch(get_action_loss, prev_params, fullstep, neggdotstepdir / lm)
+        set_flat_params(self.actor, new_params)
 
 
