@@ -113,6 +113,7 @@ def parse_args():
     parser.add_argument('--riro_update_h', default=2, type=int)
 
     parser.add_argument('--num_vec_envs', default=4, type=int)
+    parser.add_argument('--num_critic_updates', default=25, type=int)
 
     args = parser.parse_args()
 
@@ -140,34 +141,35 @@ def evaluate(env, agent, video, num_episodes, L, step):
 
 def get_value(env, agent, physics, next_state, discount):
     #state = next_state
-    state = env.reset()
+    env.reset()
 
     #print(state)
 
-    for i in range(len(state)):
-        state[i] = next_state
-    
+    #for i in range(len(state)):
+    #    state[i] = next_state
+    state = np.array(next_state)
 
-    env.env_method("set_physics",physics)
+    env.set_physics(physics)
     #env.physics.model.opt.gravity[2] = gravity
-    done = np.zeros(len(state))
+    not_done = np.ones(len(state))
     episode_reward = 0
     step = 0
-    while (not done.any()) and (step < 300):
+    while (not_done.any()) and (step < 300):
         with utils.eval_mode(agent):
             if agent.encoder_type == 'identity':
-                action = agent.sample_action_batch(state)
+                action = agent.select_action_batch(state)
             else:
-                action = agent.sample_action_batch(obs)
+                action = agent.select_action_batch(obs)
         #print(action)
         #print(action.shape)
 
         state, reward, done, _ = env.step(action)
-        episode_reward += discount**step * reward
+        not_done = np.logical_and(not_done, np.invert(done))
+        episode_reward += discount**step * not_done * reward
         step += 1
 
 
-    return episode_reward.mean(), episode_reward.var()
+    return episode_reward, episode_reward.var()
 
 
 def make_agent(obs_shape, action_shape, args, device):
@@ -400,7 +402,14 @@ def main(args):
     L = Logger(args.work_dir, use_tb=args.save_tb)
 
     #L.log('eval/episode', 0, 0)
-
+    obs_buffer = []
+    physics_buffer = []
+    states_buffer = []
+    actions_buffer = []
+    next_states_buffer = []
+    next_obs_buffer = []
+    rewards_buffer = []
+    dones_buffer = []
 
 
     cost_function = None
@@ -485,23 +494,21 @@ def main(args):
 
         
         if step >= args.init_expert_steps:
-            num_updates = args.init_training_steps if step == args.init_expert_steps else 1
+            num_updates = args.init_training_steps if step == args.init_expert_steps else args.num_critic_updates
         
 
         #if step >= args.init_random_steps:
         #    num_updates = args.init_random_steps if step == args.init_random_steps else 1
         
-            for _ in range(num_updates):
-                agent.update(replay_buffer, expert_agent, L, step, total_steps = args.num_train_steps)
+            for update in range(num_updates):
+                c_loss = agent.update(replay_buffer, expert_agent, L, step, current_update = update, total_steps = num_updates)
                 #expert_agent.update(replay_buffer, L, step)
+                wandb.log({"step_loss": c_loss})
+
         next_obs, next_state, reward, done, _ = env.step(action)
 
+
         physics = env.get_physics()
-
-        returns, return_var = get_value(vec_env, expert_agent, physics, next_state, args.discount)
-        #returns = 0
-        L.log('train_return/var', return_var, step)
-
         #print(return_var)
 
         # allow infinit bootstrap
@@ -509,7 +516,32 @@ def main(args):
             done
         )
         episode_reward += reward
-        replay_buffer.add(obs, state, action, reward, next_obs, next_state, done_bool, returns)
+
+        obs_buffer.append(obs)
+        physics_buffer.append(physics)
+        states_buffer.append(state)
+        actions_buffer.append(action)
+        next_states_buffer.append(next_state)
+        next_obs_buffer.append(next_obs)
+        rewards_buffer.append(reward)
+        dones_buffer.append(done_bool)
+
+        if (step + 1) % args.num_vec_envs == 0:
+            returns, return_var = get_value(vec_env, expert_agent, physics_buffer, next_states_buffer, args.discount)
+            #returns = 0
+            #L.log('train_return/var', return_var, step)
+            for i in range(len(obs_buffer)):
+                replay_buffer.add(obs_buffer[i], states_buffer[i], actions_buffer[i], rewards_buffer[i], 
+                    next_obs_buffer[i], next_states_buffer[i], dones_buffer[i], returns[i])
+
+            obs_buffer = []
+            physics_buffer = []
+            states_buffer = []
+            actions_buffer = []
+            next_states_buffer = []
+            next_obs_buffer = []
+            rewards_buffer = []
+            dones_buffer = []
 
         obs = next_obs
         state = next_state

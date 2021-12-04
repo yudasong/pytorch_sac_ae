@@ -53,6 +53,8 @@ def _worker(
                 remote.send(getattr(env, data))
             elif cmd == "set_attr":
                 remote.send(setattr(env, data[0], data[1]))
+            elif cmd == "set_physics":
+                remote.send(env.set_physics(data))
             elif cmd == "is_wrapped":
                 remote.send(is_wrapped(env, data))
             else:
@@ -170,6 +172,12 @@ class SubprocVecEnv(VecEnv):
         for remote in target_remotes:
             remote.send(("set_attr", (attr_name, value)))
         for remote in target_remotes:
+            remote.recv()
+
+    def set_physics(self, physics: List) -> None:
+        for remote, phy in zip(self.remotes, physics):
+            remote.send(("set_physics", phy))
+        for remote in self.remotes:
             remote.recv()
 
     def env_method(self, method_name: str, *method_args, indices: VecEnvIndices = None, **method_kwargs) -> List[Any]:

@@ -308,6 +308,8 @@ class SacTransferReturnDetAgent(object):
         with torch.no_grad():
            target_Q = reward + (not_done * self.discount * values)
 
+        #target_Q = target_Q / 100
+
         
         # with torch.no_grad():
 
@@ -362,6 +364,8 @@ class SacTransferReturnDetAgent(object):
 
         self.ag_critic.log(L, step)
 
+        return critic_loss.item()
+
     def update_actor_and_alpha(self, obs, L, step):
         # detach encoder, so we don't update it with the actor loss
         #_, pi, log_pi, log_std = self.actor(obs, detach_encoder=True)
@@ -371,6 +375,8 @@ class SacTransferReturnDetAgent(object):
         action = dist.sample(clip=self.stddev_clip)
 
         ag_Q = self.ag_critic(obs, action, detach_encoder=True)
+
+        #ag_Q = ag_Q 
 
         actor_loss = -ag_Q.mean()
         
@@ -382,7 +388,7 @@ class SacTransferReturnDetAgent(object):
         self.actor_optimizer.step()
         self.actor.log(L, step)
 
-    def update(self, replay_buffer, expert, L, step, total_steps=0):
+    def update(self, replay_buffer, expert, L, step, current_update=0, total_steps=0):
         #for _ in range(5):
         #obs, state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample()
         obs, state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample()
@@ -391,17 +397,18 @@ class SacTransferReturnDetAgent(object):
         L.log('train/batch_reward', reward.mean(), step)
 
         if self.encoder_type == 'identity':
-            self.update_ag_critic(expert, state, action, reward, next_state, not_done, values, L, step)
+            critic_loss = self.update_ag_critic(expert, state, action, reward, next_state, not_done, values, L, step)
         else:
-            self.update_ag_critic(expert, obs, action, reward, next_obs, not_done, values, L, step)
+            critic_loss = self.update_ag_critic(expert, obs, action, reward, next_obs, not_done, values, L, step)
 
-        if step % self.actor_update_freq == 0:
-            
+        #if step % self.actor_update_freq == 0:
+        if total_steps > 20 or (current_update+1) == total_steps: 
             if self.encoder_type == 'identity':
                 self.update_actor_and_alpha(state, L, step)
             else:
                 self.update_actor_and_alpha(obs, L, step)
 
+        return critic_loss
 
     def save(self, model_dir, step):
         torch.save(
