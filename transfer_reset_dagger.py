@@ -114,6 +114,7 @@ def parse_args():
 
     parser.add_argument('--num_vec_envs', default=4, type=int)
     parser.add_argument('--num_critic_updates', default=25, type=int)
+    parser.add_argument('--num_update_epochs', default=100, type=int)
 
     args = parser.parse_args()
 
@@ -424,11 +425,14 @@ def main(args):
 
                 agent.reinit()
 
-                num_updates = int(step * 50 / args.batch_size)
+                num_updates = int(step * args.num_update_epochs / args.batch_size)
                 
                 for update in range(num_updates):
-                    c_loss = agent.update(replay_buffer, expert_agent, L, update)
+                    c_loss = agent.update_c(replay_buffer, expert_agent, L, update)
                     wandb.log({"step_loss": c_loss})
+
+                for update in range(int(num_updates/2)):
+                    agent.update_a(replay_buffer, expert_agent, L, update)
 
 
             if step > 0:

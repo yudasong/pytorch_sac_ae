@@ -408,6 +408,33 @@ class SacReturnDaggerAgent(object):
 
         return critic_loss
 
+    def update_c(self, replay_buffer, expert, L, step):
+        obs, state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample()
+        #state, normalized_state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample(normalize = True)
+
+        #normalized_state = replay_buffer.normalize_states(state)
+
+
+        L.log('train/batch_reward', reward.mean(), step)
+
+        if self.encoder_type == 'identity':
+            #critic_loss = self.update_ag_critic(expert, normalized_state, action, reward, next_state, not_done, values, L, step)
+            critic_loss = self.update_ag_critic(expert, state, action, reward, next_state, not_done, values, L, step)
+        else:
+            critic_loss = self.update_ag_critic(expert, obs, action, reward, next_obs, not_done, values, L, step)
+
+        return critic_loss
+
+    def update_a(self, replay_buffer, expert, L, step):
+        obs, state, action, reward, next_obs, next_state, not_done, values = replay_buffer.sample()
+
+
+        if self.encoder_type == 'identity':
+            self.update_actor_and_alpha(state, state, L, step)
+        else:
+            self.update_actor_and_alpha(obs, L, step)
+
+
     def reinit(self):
         self.ag_critic.load_state_dict(self.critic_init.state_dict())
 
@@ -430,9 +457,11 @@ class SacReturnDaggerAgent(object):
         )
 
     def load(self, model_dir, step, no_entropy=False, post_step=500000):
-        #self.actor.load_state_dict(
+        # self.actor.load_state_dict(
         #    torch.load('%s/actor_%s.pt' % (model_dir, step), map_location=self.device)
-        #)
+        # )
+
+        # self.actor_init.load_state_dict(self.actor.state_dict())
 
         self.ag_critic.load_state_dict(
                 torch.load('%s/det_critic_%s.pt' % (model_dir, post_step), map_location=self.device)
