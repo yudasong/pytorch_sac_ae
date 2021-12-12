@@ -19,6 +19,8 @@ from sac_imitation import SacAeImitationAgent
 from sac_ae import SacAeAgent
 from sac_transfer import SacTransferAgent
 from sac_ret_dagger import SacReturnDaggerAgent
+from sac_ret_dagger_sto import SacReturnDaggerStochasticAgent
+
 from sac_transfer_imi_det import SacTransferImitateDetAgent
 
 
@@ -55,7 +57,7 @@ def parse_args():
     parser.add_argument('--num_post_rollout_steps', default=20000, type=int)
     parser.add_argument('--imitation_freq', default=2, type=int)
 
-    parser.add_argument('--batch_size', default=512, type=int)
+    parser.add_argument('--batch_size', default=128, type=int)
     parser.add_argument('--hidden_dim', default=1024, type=int)
     parser.add_argument('--num_epochs', default=100, type=int)
     # eval
@@ -114,7 +116,7 @@ def parse_args():
 
     parser.add_argument('--num_vec_envs', default=4, type=int)
     parser.add_argument('--num_critic_updates', default=25, type=int)
-    parser.add_argument('--num_update_epochs', default=100, type=int)
+    parser.add_argument('--num_update_epochs', default=50, type=int)
 
     args = parser.parse_args()
 
@@ -240,7 +242,7 @@ def make_transfer_agent(obs_shape, action_shape, args, device):
                 q1=args.q1
         )
     else:
-        return SacReturnDaggerAgent(
+        return SacReturnDaggerStochasticAgent(
                 obs_shape=obs_shape,
                 action_shape=action_shape,
                 device=device,
